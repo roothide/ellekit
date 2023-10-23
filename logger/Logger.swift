@@ -35,7 +35,7 @@ private struct TextLog: TextOutputStream {
     
     private var enableLogging: Bool {
         #if !os(macOS)
-        FileManager.default.fileExists(atPath: "/private/var/mobile/.ekenablelogging")
+        FileManager.default.fileExists(atPath: ("/private/var/mobile/.ekenablelogging"))
         #else
         FileManager.default.fileExists(atPath: "/Library/TweakInject.ekenablelogging")
         #endif
@@ -44,7 +44,7 @@ private struct TextLog: TextOutputStream {
     func write(_ string: String) {
         guard enableLogging else { return }
         #if os(iOS)
-        let log = NSURL.fileURL(withPath: "/private/var/mobile/log.txt")
+        let log = NSURL.fileURL(withPath: ("/private/var/mobile/log.txt"))
         #else
         let log = NSURL.fileURL(withPath: "/Users/charlotte/log.txt")
         #endif

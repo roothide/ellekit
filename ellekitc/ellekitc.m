@@ -95,3 +95,61 @@ void manual_memcpy(void *restrict dest, const void *src, size_t len) {
     while (len--)
         *d8++ = *s8++;
 }
+
+
+#include <mach/mach.h>
+#include <sys/mman.h>
+#include <assert.h>
+#include <Foundation/Foundation.h>
+#include <dlfcn.h>
+
+int64_t (*jbdswLockDSCPage)(uint64_t addr, uint64_t size);
+
+int memlock(void* addr, int size)
+{
+    void* newaddr = NULL;
+    vm_prot_t cur_prot=0;
+    vm_prot_t max_prot=0;
+    
+    struct dl_info di={0};
+    dladdr(addr, &di);
+    NSLog(@"memlock1: %p,%x %s : %s", addr, size, di.dli_sname, di.dli_fname);
+    
+    kern_return_t kr = vm_remap(mach_task_self(), &newaddr, size, 0, VM_FLAGS_ANYWHERE,
+                                            mach_task_self(), addr, 0, &cur_prot, &max_prot, VM_INHERIT_SHARE);
+    
+    if(kr != KERN_SUCCESS) {
+        return -1;
+    }
+    
+    NSLog(@"memlock: %p %x %x", newaddr, cur_prot, max_prot);
+    
+    size += ((uint64_t)addr) & (PAGE_SIZE-1);
+    NSLog(@"memlock: %p %p %x", addr, newaddr, size);
+    
+    if(madvise(newaddr, size, MADV_WILLNEED) != 0) {
+        return -2;
+    }
+    
+    NSLog(@"memlock: %p %p %x", addr, newaddr, size);
+    
+    kernel_version_t version={0};
+    NSLog(@"memlock: version=%d, %s", host_kernel_version(mach_host_self(), version), version);
+    
+    kr = mach_vm_wire(mach_host_self(), mach_task_self(), newaddr, size, cur_prot);
+
+    NSLog(@"memlock: %p %p %x : %d,%s", addr, newaddr, size, kr, mach_error_string(kr));
+
+    if(kr != KERN_SUCCESS)
+    {
+        if(!jbdswLockDSCPage) jbdswLockDSCPage = dlsym(RTLD_DEFAULT, "jbdswLockDSCPage");
+    
+        int locked = jbdswLockDSCPage((uint64_t)newaddr, size);
+    
+        NSLog(@"memlock: locked=%d", locked);
+    
+        return locked;
+    }
+    
+    return 0;
+}

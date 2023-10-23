@@ -1,9 +1,10 @@
 .PHONY: all deb-ios-rootless deb-ios-rootful
 
+SUBVERSION = 2
 ifneq ($(ONLY_TAG),)
-VERSION := $(shell git describe --tags --abbrev=0 | sed 's/^v//g')
+VERSION := $(shell git describe --tags --abbrev=0 | sed 's/^v//g')-$(SUBVERSION)
 else
-VERSION := $(shell git describe --tags --always | sed 's/-/|/' | sed 's/-/\./g' | sed 's/|/-/' | sed 's/\.g/\./g' | sed 's/^v//g')
+VERSION := $(shell git describe --tags --always | sed 's/-/|/' | sed 's/-/\./g' | sed 's/|/-/' | sed 's/\.g/\./g' | sed 's/^v//g')-$(SUBVERSION)
 endif
 
 COMMON_OPTIONS = BUILD_DIR="build/" CODE_SIGNING_ALLOWED="NO" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_IDENTITY="" -configuration $(CONFIGURATION)
@@ -45,8 +46,8 @@ clean:
 build-ios:
 	xcodebuild -scheme ellekit $(COMMON_OPTIONS)
 	xcodebuild -scheme injector $(COMMON_OPTIONS)
-	xcodebuild -scheme launchd $(COMMON_OPTIONS)
-	xcodebuild -scheme loader $(COMMON_OPTIONS)
+	# xcodebuild -scheme launchd $(COMMON_OPTIONS)
+	# xcodebuild -scheme loader $(COMMON_OPTIONS)
 	xcodebuild -scheme safemode-ui $(COMMON_OPTIONS)
 
 build-macos:
@@ -60,7 +61,10 @@ deb-ios-rootful: INSTALL_PREFIX =
 deb-ios-rootless: ARCHITECTURE = iphoneos-arm64
 deb-ios-rootless: INSTALL_PREFIX = /var/jb
 
-deb-ios-rootful deb-ios-rootless: build-ios
+deb-ios-roothide: ARCHITECTURE = iphoneos-arm64e
+deb-ios-roothide: INSTALL_PREFIX = 
+
+deb-ios-rootful deb-ios-rootless deb-ios-roothide: build-ios
 	@rm -rf work-$(ARCHITECTURE)
 	@mkdir -p $(STAGE_DIR)
 
@@ -108,7 +112,7 @@ deb-ios-rootful deb-ios-rootless: build-ios
 	
 	@rm -rf work-$(ARCHITECTURE)
 
-deb-ios: deb-ios-rootful deb-ios-rootless
+deb-ios: deb-ios-rootful deb-ios-rootless deb-ios-roothide
 
 deb-macos: ARCHITECTURE = macos
 deb-macos: build-macos

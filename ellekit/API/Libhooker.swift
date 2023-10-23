@@ -84,11 +84,11 @@ public func LHHookFunctions(_ allHooks: UnsafePointer<LHFunctionHook>, _ count: 
         guard let target = targetHook.function,
                 let replacement = targetHook.replacement else { return Int(LIBHOOKER_ERR_NO_SYMBOL.rawValue); }
         
-        let orig: UnsafeMutableRawPointer? = hook(target, replacement)
+        let orig: UnsafeMutableRawPointer? = hook(target, replacement, targetHook.oldptr.assumingMemoryBound(to: UnsafeMutableRawPointer?.self))
         
-        if let lhORIG = targetHook.oldptr {
-            lhORIG.assumingMemoryBound(to: UnsafeMutableRawPointer?.self).pointee = orig
-        }
+//        if let lhORIG = targetHook.oldptr {
+//            lhORIG.assumingMemoryBound(to: UnsafeMutableRawPointer?.self).pointee = orig
+//        }
         
         if let orig = orig {
             print("[+] ellekit: Performed one hook in LHHookFunctions from \(String(describing: target)) with orig at \(String(describing: orig))")

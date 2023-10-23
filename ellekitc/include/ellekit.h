@@ -14,6 +14,15 @@
 
 #import "xpc.h"
 
+//#include "jbroot.h"
+
+//only for sb safemode
+const char* JBROOT=NULL;
+static void jbrootinit() { JBROOT=strdup(getenv("JBROOT")); }
+static NSString* jbroot(NSString* path) {
+    return [NSString stringWithFormat:@"%s/%@",JBROOT,path];
+}
+
 struct sCSRange {
    unsigned long long location;
    unsigned long long length;
@@ -88,6 +97,8 @@ extern kern_return_t
 mach_vm_remap(vm_map_t target_task, mach_vm_address_t *target_address, mach_vm_size_t size, mach_vm_offset_t mask, int flags, vm_map_t src_task, mach_vm_address_t src_address, boolean_t copy, vm_prot_t *cur_protection, vm_prot_t *max_protection, vm_inherit_t inheritance);
 
 extern void manual_memcpy(void *restrict dest, const void *src, size_t len);
+
+int memlock(void*,int);
 
 #pragma pack(4)
 typedef struct {

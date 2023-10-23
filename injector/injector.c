@@ -11,6 +11,15 @@
 #include <os/log.h>
 #include <mach-o/dyld.h>
 
+const char* JBROOT = NULL;
+#define jbrootinit() {JBROOT=strdup(getenv("JBROOT"));}
+#define jbroot(path) ({ \
+    char *outPath = alloca(PATH_MAX); \
+    strlcpy(outPath, JBROOT, PATH_MAX); \
+    strlcat(outPath, path, PATH_MAX); \
+    (outPath); \
+})
+
 extern void NSLog(CFStringRef, ...);
 
 static bool rootless = false;
@@ -29,11 +38,11 @@ static int isApp(const char* path) {
 #define TWEAKS_DIRECTORY "/Library/TweakInject/"
 #else
 #define TWEAKS_DIRECTORY_ROOTFUL "/usr/lib/TweakInject/"
-#define TWEAKS_DIRECTORY_ROOTLESS "/var/jb/usr/lib/TweakInject/"
+#define TWEAKS_DIRECTORY_ROOTLESS jbroot("/usr/lib/TweakInject/")
 #define MOBILESAFETY_PATH_ROOTFUL "/usr/lib/ellekit/MobileSafety.dylib"
-#define MOBILESAFETY_PATH_ROOTLESS "/var/jb/usr/lib/ellekit/MobileSafety.dylib"
+#define MOBILESAFETY_PATH_ROOTLESS jbroot("/usr/lib/ellekit/MobileSafety.dylib")
 #define OLDABI_PATH_ROOTFUL "/usr/lib/ellekit/OldABI.dylib"
-#define OLDABI_PATH_ROOTLESS "/var/jb/usr/lib/ellekit/OldABI.dylib"
+#define OLDABI_PATH_ROOTLESS jbroot("/usr/lib/ellekit/OldABI.dylib")
 #endif
 
 char* append_str(const char* str, const char* append_str) {
@@ -318,6 +327,8 @@ static void tweaks_iterate(void) {
 __attribute__((constructor))
 static void injection_init(void) {
     
+    jbrootinit();
+    
     char* msSafe = getenv("_MSSafeMode");
     if (msSafe && atoi(msSafe) == 1) {
         return;
@@ -330,7 +341,8 @@ static void injection_init(void) {
     
 #if !TARGET_OS_OSX
     
-    if (!access("/var/jb/usr/lib/ellekit/libinjector.dylib", F_OK)) {
+    //if (!access("/var/jb/usr/lib/ellekit/libinjector.dylib", F_OK))
+    {
         rootless = true;
     }
     
@@ -344,7 +356,7 @@ static void injection_init(void) {
         }
     }
     
-    if (!access("/var/mobile/.eksafemode", F_OK)) {
+    if (!access(jbroot("/var/mobile/.eksafemode"), F_OK)) {
         return;
     }
 #endif

@@ -32,6 +32,8 @@ extension UIViewController {
     
     @objc func applicationDidFinishLaunching(_ application: UIApplication) {
         
+        NSLog("MobileSafety: applicationDidFinishLaunching")
+        
         let block = unsafeBitCast(orig, to: (@convention (c) (NSObject, Selector, UIApplication) -> Void).self)
         
         block(self, #selector(UIApplicationDelegate.applicationDidFinishLaunching(_:)), application)
@@ -39,6 +41,7 @@ extension UIViewController {
         let title = "Safe Mode"
         let message = "You've entered safe mode. SpringBoard tweaks will not get injected until you respring your device. You can also safely remove your broken tweaks."
         DispatchQueue.main.async(execute: {
+            NSLog("MobileSafety: async executed")
             guard let alertWindow = UIApplication.shared.keyWindow else { return }
             
             alertWindow.rootViewController = alertWindow.rootViewController?.top
@@ -46,7 +49,7 @@ extension UIViewController {
             let alert2 = UIAlertController(title: title, message: message, preferredStyle: .alert)
             
             let defaultAction2 = UIAlertAction(title: "OK", style: .default, handler: { action in
-                try? FileManager.default.removeItem(atPath: "/var/mobile/.eksafemode")
+                try? FileManager.default.removeItem(atPath: jbroot("/var/mobile/.eksafemode"))
             })
             
             alert2.addAction(defaultAction2)
@@ -60,6 +63,7 @@ extension UIViewController {
 }
 
 func performHooks() {
+    NSLog("MobileSafety: performHooks")
     guard let sb = NSClassFromString("SpringBoard") else { return }
     let replacement = class_getMethodImplementation(
         SpringBoard2.self,
@@ -81,7 +85,7 @@ func trap(signals: [Int32], action: (@convention(c) (Int32) -> Void)?) {
 }
 
 func handleSBCrash(currentSig: Int32) {
-    FileManager.default.createFile(atPath: "/var/mobile/.eksafemode", contents: Data())
+    FileManager.default.createFile(atPath: jbroot("/var/mobile/.eksafemode"), contents: Data())
     allSignals.forEach {
         signal($0, SIG_DFL)
     }
@@ -102,14 +106,17 @@ let allSignals = [
 
 @_cdecl("tweak_entry")
 public func tweak_entry() {
+    
+    jbrootinit()
         
-    NSLog("Hello world, SpringBoard!")
+    NSLog("MobileSafety: Hello world, SpringBoard!")
                 
-    if FileManager.default.fileExists(atPath: "/var/mobile/.eksafemode") {
+    if FileManager.default.fileExists(atPath: jbroot("/var/mobile/.eksafemode")) {
         performHooks()
     } else if checkVolumeUp() {
         tprint("Volume up!!!")
-        FileManager.default.createFile(atPath: "/var/mobile/.eksafemode", contents: Data())
+        NSLog("MobileSafety: Volume up!!!")
+        FileManager.default.createFile(atPath: jbroot("/var/mobile/.eksafemode"), contents: Data())
         exit(0)
     }
         

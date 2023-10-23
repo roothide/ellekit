@@ -69,10 +69,20 @@ public func MSFindSymbol(_ image: UnsafeRawPointer?, _ name: UnsafeRawPointer?) 
 
 @_cdecl("MSHookFunction")
 public func MSHookFunction(_ symbol: UnsafeMutableRawPointer, _ replace: UnsafeMutableRawPointer, _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>?) {
-    let orig: UnsafeMutableRawPointer? = hook(symbol, replace)
-    if let result, let orig {
-        result.pointee = orig
-    }
+    
+//    let enforceThreadSafety = enforceThreadSafety
+//    if enforceThreadSafety {
+//        stopAllThreads()
+//    }
+    
+    let orig: UnsafeMutableRawPointer? = hook(symbol, replace, result)
+//    if let result, let orig {
+//        result.pointee = orig
+//    }
+    
+//    if enforceThreadSafety {
+//        resumeAllThreads()
+//    }
 }
 
 @_cdecl("MSHookClassPair")
