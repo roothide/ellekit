@@ -25,7 +25,7 @@ public func patchFunction(_ function: UnsafeMutableRawPointer, @InstructionBuild
 }
 
 @_cdecl("EKHookFunction")
-public func hook(_ stockTarget: UnsafeMutableRawPointer, _ stockReplacement: UnsafeMutableRawPointer, _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>?) -> UnsafeMutableRawPointer? {
+public func hook(_ stockTarget: UnsafeMutableRawPointer, _ stockReplacement: UnsafeMutableRawPointer, _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>?, _ internalSkipChecks: Bool = false) -> UnsafeMutableRawPointer? {
     
     /*
     guard isDebugged() else {
@@ -41,6 +41,8 @@ public func hook(_ stockTarget: UnsafeMutableRawPointer, _ stockReplacement: Uns
     if let newReplacement = hooks[target] {
         return hook(newReplacement.makeReadable(), replacement, result)
     }
+    
+    print("finding size", target)
     
     let targetSize = findFunctionSize(target) ?? 6
     let safeReg = findSafeRegister(target)
@@ -85,7 +87,7 @@ public func hook(_ stockTarget: UnsafeMutableRawPointer, _ stockReplacement: Uns
          
          patchSize = 4
          
-     } else if let tramp = Trampoline(
+     } else if !internalSkipChecks, let tramp = Trampoline(
         base: target,
         target: replacement
      ) {

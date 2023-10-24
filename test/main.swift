@@ -11,8 +11,35 @@ import ellekit
 import AppKit
 import Darwin
 
-exit(0);
 print(isDebugged())
+
+func printSymbol(for sym: String) {
+    print(sym+":", dlsym(dlopen(nil, RTLD_NOW), sym))
+}
+
+printSymbol(for: "xpc_connection_create_mach_service")
+printSymbol(for: "xpc_connection_set_event_handler")
+printSymbol(for: "unlink")
+
+var check: UInt64 = 0
+
+shared_region_check(&check)
+
+print(String(format: "%02llX", check))
+
+@_cdecl("rep3")
+public func rep3() -> Int32 {
+    print("called rep 3")
+    return 41
+}
+
+//let tramp = Trampoline(base: dlsym(dlopen(nil, RTLD_NOW), "unlink"), target: dlsym(dlopen(nil, RTLD_NOW), "rep3"))
+//
+//print(tramp)
+//
+//unlink("/")
+
+let a = 1+1
 
 #if false
 @_cdecl("rep1")
@@ -93,6 +120,8 @@ print(test_weirdfuncptr)
 
 let orig_weirdfunc = hook(test_weirdfuncptr, dlsym(dlopen(nil, RTLD_NOW), "atoi")!)!
 
+printSymbol(for: "dmb_sy")
+printSymbol(for: "shared_region_check")
 print("start")
 print("ORIG:", unsafeBitCast(orig_weirdfunc, to: (@convention (c) (UnsafePointer<CChar>) -> Int32).self)("4"))
 print("REPLACEMENT:", unsafeBitCast(test_weirdfuncptr, to: (@convention (c) (UnsafePointer<CChar>) -> Int32).self)("4"))
@@ -126,13 +155,13 @@ let repptr2 = unsafeBitCast(repcl2, to: UnsafeMutableRawPointer.self)
 var socketorig: UnsafeMutableRawPointer! = nil
 
 @_cdecl("socketrep")
-public func socketrep(_ x0: Int32, _ x1: Int32, _ x2: Int32) -> Int32 {
-    print("called socket")
-    let ret = unsafeBitCast(socketorig, to: (@convention (c) (Int32, Int32, Int32) -> Int32).self)(x0, x1, x2)
-    return ret
+public func socketrep(_ x0: UnsafePointer<CChar>, _ x1: DispatchQueue, _ x2: UInt64) -> UnsafeRawPointer {
+    print("called socket", String(cString: x0))
+    
+    return unsafeBitCast(socketorig, to: (@convention(c) (UnsafePointer<CChar>, DispatchQueue, UInt64) -> UnsafeRawPointer).self)(x0, x1, x2)
 }
 
-let socketrepcl: @convention (c) (Int32, Int32, Int32) -> Int32 = socketrep
+let socketrepcl: @convention (c) (UnsafePointer<CChar>, DispatchQueue, UInt64) -> UnsafeRawPointer = socketrep
 
 let socketrepptr = unsafeBitCast(socketrepcl, to: UnsafeMutableRawPointer.self)
 
@@ -181,16 +210,16 @@ for image in 0..<_dyld_image_count() {
 //        print(unsafeBitCast(sym, to: (@convention (c) (UnsafePointer<CChar>) -> Int32).self)("4"))
 //    }
     
-    if let sym = MSFindSymbol(_dyld_get_image_header(image), "_socket") {
-        print("_socket: \(sym)")
+    if let sym = MSFindSymbol(_dyld_get_image_header(image), "_xpc_connection_create_mach_service") {
+        print("_xpc_connection_create_mach_service: \(sym)")
                 
-        let ret1 = socket(32, 1, 2)
+        //let ret1 = xpc_connection_create_mach_service("red.charlotte.ellekit", .global(), 0)
         
         socketorig = hook(UnsafeMutableRawPointer(mutating: sym), socketrepptr)!
         
-        let ret = socket(32, 1, 2)
+        let ret = Unmanaged.passRetained(xpc_connection_create_mach_service("red.charlotte.ellekit2", .main, 0))
                 
-        print(ret1, ret)
+        print(ret)
     }
     
     #if false
@@ -258,6 +287,7 @@ extension FixedWidthInteger {
 }
 #endif
 
+/*
 // CF tests
 let image2 = try ellekit.openImage(image: "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation")!
 calculateTime {
@@ -269,6 +299,7 @@ calculateTime {
         )! // private sym
     )
 }
+ */
 
 func calculateTime(block : (() -> Void)) {
         let start = DispatchTime.now()
@@ -303,6 +334,7 @@ calculateTime {
 }
 #endif
 
+/*
 print("--------- Finding objc_direct symbol ---------")
 // CF tests
 let image = try ellekit.openImage(image: "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation")!
@@ -321,6 +353,7 @@ let symbol = try ellekit.findSymbol(
     symbol: "-[CFPrefsDaemon handleSourceMessage:replyHandler:]"
 )! // private sym
 print("Symbol found:", symbol)
+ */
 
 print("--------- Finding Capt's symbol ---------")
 for image in 0..<_dyld_image_count() {
@@ -355,25 +388,28 @@ let _posix_spawn_sym = try ellekit.findSymbol(image: libkernel, symbol: "_posix_
 let _memcpy_sym = try ellekit.findSymbol(image: libkernel, symbol: "_memcpy")!
 print("Symbols found: \(_posix_spawn_sym) \(_memcpy_sym)")
 
+/*
 // normal dylib test
 print("--------- Hooking a findSymbol result ---------")
 dlopen("/usr/local/lib/libsubstrate.dylib", RTLD_NOW)
 let libsubstrate = try ellekit.openImage(image: "/usr/local/lib/libsubstrate.dylib")!
 let _MSHookFunction_sym = try ellekit.findSymbol(image: libsubstrate, symbol: "_MSHookFunction")!
 let _:UnsafeMutableRawPointer? = ellekit.hook(.init(mutating: _MSHookFunction_sym), .init(mutating: _memcpy_sym))
-
+*/
+ 
 print("--------- Finding _main in myself ---------")
 // selftest
 let self_bin = try ellekit.openImage(image: ProcessInfo.processInfo.processName)!
 let _main_self_sym = try ellekit.findSymbol(image: self_bin, symbol: "_main")!
 print("_main:", _main_self_sym)
 
+/*
 print("--------- Finding bundles for thin Mach-O ---------")
 // MobileSMS
 let msms = try ellekit.getLinkedBundleIDs(file: "/Users/charlotte/Downloads/prng_seedctl")
 
 print("Found bundles for MobileSMS:", msms.prefix(2))
-
+*/
 print("--------- Finding bundles for thick Mach-O ---------")
 let dirPath = "/usr/sbin/"
 for path in try FileManager.default.contentsOfDirectory(atPath: dirPath) {
@@ -432,13 +468,14 @@ let nspoprepptr = unsafeBitCast(nspoprepcl, to: UnsafeMutableRawPointer.self)
 
 let test2: UnsafeMutableRawPointer = hook(nspopptr, nspoprepptr)!
 
-print("hooked")
+print("hooked", nspopptr)
 
 func test3() {
     let h = unsafeBitCast(nspopptr, to: (@convention (c) () -> Int32).self)()
 
     print(h)
 }
+
 print("testing")
 
 test3()

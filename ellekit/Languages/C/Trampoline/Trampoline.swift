@@ -13,8 +13,26 @@ public struct Trampoline {
     public var orig: UnsafeMutableRawPointer? = nil
     
     // PAC: strip before initializing
-    #warning("Trampolines ARE enabled")
     public init?(base: UnsafeMutableRawPointer, target: UnsafeMutableRawPointer) {
+        
+        #if DEBUG
+        #else
+        return nil;
+        #endif
+        
+        var info = Dl_info()
+        dladdr(base, &info)
+        
+        if #available(iOS 9999.0, macOS 11.0, *) {
+            if info.dli_fname != nil && _dyld_shared_cache_contains_path(info.dli_fname) {
+                print("in dyld cache")
+            } else {
+                return nil
+            }
+        } else {
+            return nil
+        }
+        
         stopAllThreads()
         
         defer { resumeAllThreads() }
@@ -67,6 +85,7 @@ public struct Trampoline {
             return nil
         }
         
+        print(self.trampoline)
         hooks[self.trampoline] = orig
         
         let origJump: [UInt8] = [0x50, 0x00, 0x00, 0x58] + // ldr x16, #8
