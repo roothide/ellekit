@@ -159,11 +159,11 @@ public class cbnz: Instruction {
 
     static let base = 0b0_011010_1_0000000000000000000_00000
     
-    public static func destination(_ instruction: UInt32, pc: UInt64) -> UInt64 {
-        var imm = (instruction & 0xFFFFE0) >> 3
-        imm |= (instruction & 0x60000000) >> 29
-        return pc + UInt64((imm - 1) / 4)
-    }
+//    public static func destination(_ instruction: UInt32, pc: UInt64) -> UInt64 {
+//        var imm = (instruction & 0xFFFFE0) >> 3
+//        imm |= (instruction & 0x60000000) >> 29
+//        return pc + UInt64((imm - 1) / 4)
+//    }
 }
 
 #if DEBUG

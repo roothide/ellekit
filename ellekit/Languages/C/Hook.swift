@@ -66,7 +66,7 @@ public func hook(_ stockTarget: UnsafeMutableRawPointer, _ stockReplacement: Uns
     var branchAfter: Bool = false
     var patchSize: Int = -1
     
-    if targetSize >= 3 && abs(branchOffset / 1024 / 1024 / 1024) < 4 && branchOffset > 0 {
+    if targetSize >= 3 && abs(branchOffset / 1024 / 1024 / 1024) < 4 {
          print("[*] adrp branch")
 
         let target_addr = UInt64(UInt(bitPattern: target))
