@@ -65,8 +65,8 @@ extension Instructions {
                     let offset: Int32 = (signExtend(((reversed >> 5) & 0x7ffff), 17) * 4 + Int32(4*index))
 
                     let jump = assembleJump(UInt64(Int64(formerPC) + Int64(offset)), pc: newPC, link: false, big: true)
-                    return b(8 / 4, cond: .init(Int(cond))).bytes() +
-                    b(Int((Double(jump.count + 4) / 4))).bytes() +
+                    return b(8, cond: .init(Int(cond))).bytes() +
+                    b(Int((Double(jump.count + 4)))).bytes() +
                         jump
                 }
                 
@@ -78,8 +78,8 @@ extension Instructions {
                     let offset: Int32 = (signExtend(((reversed >> 5) & 0x7ffff), 17) * 4 + Int32(4*index))
                                         
                     let jump = assembleJump(UInt64(Int64(formerPC) + Int64(offset)), pc: newPC, link: false, big: true)
-                    return cbz(.x(Int(register)), 8 / 4).bytes() +
-                    b(Int((Double(jump.count + 4) / 4))).bytes() +
+                    return cbz(.x(Int(register)), 8).bytes() +
+                    b(Int((Double(jump.count + 4)))).bytes() +
                         jump
                 }
                 
@@ -89,8 +89,8 @@ extension Instructions {
                     let offset: Int32 = (signExtend(((reversed >> 5) & 0x7ffff), 17) * 4 + Int32(4*index))
                                         
                     let jump = assembleJump(UInt64(Int64(formerPC) + Int64(offset)), pc: newPC, link: false, big: true)
-                    return cbnz(.x(Int(register)), 8 / 4).bytes() +
-                    b(Int((Double(jump.count + 4) / 4))).bytes() +
+                    return cbnz(.x(Int(register)), 8).bytes() +
+                    b(Int((Double(jump.count + 4)))).bytes() +
                         jump
                 }
                 
@@ -102,8 +102,8 @@ extension Instructions {
                     let offset: Int32 = (signExtend(((reversed >> 5) & 0x7ffff), 17) * 4 + Int32(4*index))
                                         
                     let jump = assembleJump(UInt64(Int64(formerPC) + Int64(offset)), pc: newPC, link: false, big: true)
-                    return cbz(.w(Int(register)), 8 / 4).bytes() +
-                    b(Int((Double(jump.count + 4) / 4))).bytes() +
+                    return cbz(.w(Int(register)), 8).bytes() +
+                    b(Int((Double(jump.count + 4)))).bytes() +
                         jump
                 }
                 
@@ -113,8 +113,8 @@ extension Instructions {
                     let offset: Int32 = (signExtend(((reversed >> 5) & 0x7ffff), 17) * 4 + Int32(4*index))
                                         
                     let jump = assembleJump(UInt64(Int64(formerPC) + Int64(offset)), pc: newPC, link: false, big: true)
-                    return cbnz(.w(Int(register)), 8 / 4).bytes() +
-                    b(Int((Double(jump.count + 4) / 4))).bytes() +
+                    return cbnz(.w(Int(register)), 8).bytes() +
+                    b(Int((Double(jump.count + 4)))).bytes() +
                         jump
                 }
                 

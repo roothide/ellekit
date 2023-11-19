@@ -41,13 +41,13 @@ public class b: Instruction {
 
     public init(_ addr: Int) {
         var base = Self.base
-        base |= (addr & 0x3ffffff)
+        base |= ((addr/4) & 0x3ffffff)
         self.value = reverse(base)
     }
     
     public init(_ addr: Int, cond: Cond) {
         var base = Self.condBase
-        base |= ((addr & 0x7ffff) << 5)
+        base |= (((addr/4) & 0x7ffff) << 5)
         base |= cond.rawValue
         self.value = reverse(base)
     }
@@ -69,7 +69,7 @@ public class bl: Instruction {
 
     public init(_ addr: Int) {
         var base = Self.base
-        base |= addr
+        base |= addr/4
         self.value = reverse(base)
     }
 
@@ -130,7 +130,7 @@ public class cbz: Instruction {
     public init(_ register: Register, _ addr: Int) {
         var base = Self.base
         base |= (register.w ? 0 : 1) << 31
-        base |= (addr << 5)
+        base |= ((addr/4) << 5)
         base |= register.value
         self.value = reverse(base)
     }
@@ -152,7 +152,7 @@ public class cbnz: Instruction {
     public init(_ register: Register, _ addr: Int) {
         var base = Self.base
         base |= (register.w ? 0 : 1) << 31
-        base |= (addr << 5)
+        base |= ((addr/4) << 5)
         base |= register.value
         self.value = reverse(base)
     }

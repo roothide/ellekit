@@ -53,6 +53,14 @@ extension UIViewController {
             })
             
             alert2.addAction(defaultAction2)
+            
+
+            let respringAction2 = UIAlertAction(title: "Respring", style: .destructive, handler: { action in
+                try? FileManager.default.removeItem(atPath: jbroot("/var/mobile/.eksafemode"))
+                exit(0)
+            })
+            
+            alert2.addAction(respringAction2)
         
             alertWindow.makeKeyAndVisible()
         
