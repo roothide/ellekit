@@ -108,6 +108,6 @@ public struct Trampoline {
     }
     
     public func buildHook() {
-        let _: UnsafeMutableRawPointer? = hook(self.base, self.trampoline.advanced(by: 16), nil) // hook base to tramp + 16 which jumps to the replacement... ellekit /should/ use simple branching for the tiny hook
+        let _: UnsafeMutableRawPointer? = hook(self.base, self.trampoline.advanced(by: 16), nil, true) // hook base to tramp + 16 which jumps to the replacement... ellekit /should/ use simple branching for the tiny hook
     }
 }
