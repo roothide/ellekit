@@ -11,6 +11,11 @@
 #include <os/log.h>
 #include <mach-o/dyld.h>
 
+bool g_isUIProcess = false;
+
+#define PROC_PIDPATHINFO_MAXSIZE  (1024)
+int proc_pidpath(pid_t pid, void *buffer, uint32_t buffersize);
+
 const char* JBROOT = NULL;
 #define jbrootinit() {JBROOT=strdup(getenv("JBROOT"));}
 #define jbroot(path) ({ \
@@ -71,7 +76,12 @@ char *get_last_path_component(const char *path)
 }
 
 #define MAX_TWEAKMANAGERS 20 // this is very reasonable
-char* tweakManagers[MAX_TWEAKMANAGERS];
+char* tweakManagers[MAX_TWEAKMANAGERS]={0};
+int tweakManagers_count=0;
+
+#define MAX_TWEAKS 1000
+char* tweaks[MAX_TWEAKS]={0};
+int tweaks_count=0;
 
 static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
     
@@ -155,17 +165,34 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
         for (CFIndex i = 0; i < CFArrayGetCount(bundles); i++) {
             CFStringRef id = CFArrayGetValueAtIndex(bundles, i);
             if (id) {
-                if (CFBundleGetBundleWithIdentifier(id)) {
+                
+                if(!g_isUIProcess) {
+                    const char* bid = CFStringGetCStringPtr(id, kCFStringEncodingUTF8);
+                    if(!bid) continue;
+                    
+                    if(strncmp(bid, "com.apple.UIKit", sizeof("com.apple.UIKit")-1)==0 // and com.apple.UIKitCore
+                       || strncmp(bid, "com.apple.TextInput", sizeof("com.apple.TextInput")-1)==0 // and com.apple.TextInputUI
+                       || strncmp(bid, "com.apple.TextEntry", sizeof("com.apple.TextEntry")-1)==0
+                       //for what in libhooker's tweakloader ? || strncmp(bid, "UI", sizeof("UI")-1)==0
+                       ){
+                        continue;
+                    }
+                }
+                
+                CFBundleRef bundle = CFBundleGetBundleWithIdentifier(id);
+                if (bundle
+                    && CFBundleIsExecutableLoaded(bundle)
+                    ) {
                     goto success;
                 }
 
-                CFMutableStringRef lowercased = CFStringCreateMutableCopy(NULL, 0, id);
-                CFStringLowercase(lowercased, NULL);
-                if (CFBundleGetBundleWithIdentifier(lowercased)) {
-                    CFRelease(lowercased);
-                    goto success;
-                }
-                CFRelease(lowercased);
+//                CFMutableStringRef lowercased = CFStringCreateMutableCopy(NULL, 0, id);
+//                CFStringLowercase(lowercased, NULL);
+//                if (CFBundleGetBundleWithIdentifier(lowercased)) {
+//                    CFRelease(lowercased);
+//                    goto success;
+//                }
+//                CFRelease(lowercased);
             }
         }
     }
@@ -285,33 +312,15 @@ static void tweaks_iterate(void) {
                         
             if (ret) {
                 if (isTweakManager) {
-                    int i;
-                    for (i = 0; i < MAX_TWEAKMANAGERS && tweakManagers[i] != NULL; i++); // find the end of the array
-                    
-                    if (i == MAX_TWEAKMANAGERS) return; // array is full
-                    tweakManagers[i] = malloc(strlen(full_path) + 1); // allocate memory for the new string
-                    strcpy(tweakManagers[i], full_path); // copy the string into the new memory location
+                    if(tweakManagers_count < MAX_TWEAKMANAGERS) {
+                        tweakManagers[tweakManagers_count] = strdup(full_path);
+                        tweakManagers_count++;
+                    }
                 } else {
-                    int i;
-                    for (i = 0; i < MAX_TWEAKMANAGERS && tweakManagers[i] != NULL; i++) {
-                        dlopen(tweakManagers[i], RTLD_LAZY);
+                    if(tweaks_count < MAX_TWEAKS) {
+                        tweaks[tweaks_count] = strdup(full_path);
+                        tweaks_count++;
                     }
-                    
-                    #if !TARGET_OS_OSX
-                    if (rootless) {
-                        if (!access(OLDABI_PATH_ROOTLESS, F_OK)) {
-                            dlopen(OLDABI_PATH_ROOTLESS, RTLD_LAZY);
-                        }
-                    } else {
-                        if (!access(OLDABI_PATH_ROOTFUL, F_OK)) {
-                            dlopen(OLDABI_PATH_ROOTFUL, RTLD_LAZY);
-                        }
-                    }
-                    #endif
-
-                    dlopen(full_path, RTLD_LAZY);
-
-                    dlerror();
                 }
             }
             
@@ -321,7 +330,50 @@ static void tweaks_iterate(void) {
         }
     }
     
+    if(tweaks_count) {
+        for (int i = 0; i < tweakManagers_count; i++) {
+            dlopen(tweakManagers[i], RTLD_LAZY);
+            free(tweakManagers[i]);
+            tweakManagers[i] = NULL;
+        }
+
+#if !TARGET_OS_OSX
+        if (rootless) {
+            if (!access(OLDABI_PATH_ROOTLESS, F_OK)) {
+                dlopen(OLDABI_PATH_ROOTLESS, RTLD_LAZY);
+            }
+        } else {
+            if (!access(OLDABI_PATH_ROOTFUL, F_OK)) {
+                dlopen(OLDABI_PATH_ROOTFUL, RTLD_LAZY);
+            }
+        }
+#endif
+
+        for (int i = 0; i < tweaks_count; i++) {
+            dlopen(tweaks[i], RTLD_LAZY);
+            free(tweaks[i]);
+            tweaks[i] = NULL;
+        }
+    }
+    
     free(files);
+}
+
+#define APP_PATH_PREFIX "/private/var/containers/Bundle/Application/"
+bool isAppPath( char* path)
+{
+    if(strncmp(path, APP_PATH_PREFIX, sizeof(APP_PATH_PREFIX)-1) != 0)
+        return false;
+
+    char* p1 = path + sizeof(APP_PATH_PREFIX)-1;
+    char* p2 = strchr(p1, '/');
+    if(!p2) return false;
+
+    //is normal app or jailbroken app/daemon?
+    if((p2 - p1) != (sizeof("xxxxxxxx-xxxx-xxxx-yxxx-xxxxxxxxxxxx")-1))
+        return false;
+
+    return true;
 }
 
 __attribute__((constructor))
@@ -364,6 +416,13 @@ static void injection_init(void) {
     const char* extension = getenv("SANDBOX_EXTENSION");
     if (extension) {
         sandbox_extension_consume(extension);
+    }
+    
+    char pathbuf[PROC_PIDPATHINFO_MAXSIZE] = {0};
+    if (proc_pidpath(getpid(), pathbuf, sizeof(pathbuf)) > 0) {
+        if(isAppPath(pathbuf) || strstr(pathbuf, "/Applications/")
+           || strcmp(pathbuf, "/System/Library/CoreServices/SpringBoard.app/SpringBoard")==0)
+            g_isUIProcess = true;
     }
     
     tweaks_iterate();

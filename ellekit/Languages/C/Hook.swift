@@ -251,7 +251,7 @@ func rawHook(address: UnsafeMutableRawPointer, code: UnsafePointer<UInt8>?, size
     let goodSize = Int(size)
     let machAddr = mach_vm_address_t(UInt(bitPattern: address))
     
-//    let locked = memlock(address, Int32(size))
+    //let locked = memlock(address, Int32(size))
 //    guard locked==0 else {
 //        return Int(locked)
 //    }
