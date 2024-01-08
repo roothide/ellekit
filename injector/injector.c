@@ -400,6 +400,9 @@ static void injection_init(void) {
     
     if (CFBundleGetMainBundle() && CFBundleGetIdentifier(CFBundleGetMainBundle())) {
         if (CFEqual(CFBundleGetIdentifier(CFBundleGetMainBundle()), CFSTR("com.apple.springboard"))) {
+            
+            g_isUIProcess = true;
+            
             if (rootless) {
                 dlopen(MOBILESAFETY_PATH_ROOTLESS, RTLD_NOW);
             } else {

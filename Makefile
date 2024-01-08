@@ -1,6 +1,6 @@
 .PHONY: all deb-ios-rootless deb-ios-rootful
 
-SUBVERSION = 2
+SUBVERSION = 3
 ifneq ($(ONLY_TAG),)
 VERSION := $(shell git describe --tags --abbrev=0 | sed 's/^v//g')-$(SUBVERSION)
 else
