@@ -39,7 +39,7 @@ extension UIViewController {
         block(self, #selector(UIApplicationDelegate.applicationDidFinishLaunching(_:)), application)
         
         let title = "Safe Mode"
-        let message = "You've entered safe mode. SpringBoard tweaks will not get injected until you respring your device. You can also safely remove your broken tweaks."
+        let message = "You've entered safe mode. SpringBoard tweaks will not get injected until you respring your device. You can select Dismiss to safely remove your broken tweaks."
         DispatchQueue.main.async(execute: {
             NSLog("MobileSafety: async executed")
             guard let alertWindow = UIApplication.shared.keyWindow else { return }
@@ -48,14 +48,14 @@ extension UIViewController {
         
             let alert2 = UIAlertController(title: title, message: message, preferredStyle: .alert)
             
-            let defaultAction2 = UIAlertAction(title: "OK", style: .default, handler: { action in
+            let defaultAction2 = UIAlertAction(title: "Dismiss", style: .default, handler: { action in
                 try? FileManager.default.removeItem(atPath: jbroot("/var/mobile/.eksafemode"))
             })
             
             alert2.addAction(defaultAction2)
             
 
-            let respringAction2 = UIAlertAction(title: "Respring", style: .destructive, handler: { action in
+            let respringAction2 = UIAlertAction(title: "Exit Safe Mode", style: .destructive, handler: { action in
                 try? FileManager.default.removeItem(atPath: jbroot("/var/mobile/.eksafemode"))
                 exit(0)
             })
