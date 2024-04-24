@@ -14,14 +14,7 @@
 
 #import "xpc.h"
 
-//#include "jbroot.h"
-
-//only for sb safemode
-const char* JBROOT=NULL;
-static void jbrootinit() { JBROOT=strdup(getenv("JBROOT")); }
-static NSString* jbroot(NSString* path) {
-    return [NSString stringWithFormat:@"%s/%@",JBROOT,path];
-}
+#include <roothide/roothide.h>
 
 struct sCSRange {
    unsigned long long location;

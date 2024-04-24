@@ -10,20 +10,12 @@
 #include <dlfcn.h>
 #include <os/log.h>
 #include <mach-o/dyld.h>
+#include <roothide/roothide.h>
 
 bool g_isUIProcess = false;
 
 #define PROC_PIDPATHINFO_MAXSIZE  (1024)
 int proc_pidpath(pid_t pid, void *buffer, uint32_t buffersize);
-
-const char* JBROOT = NULL;
-#define jbrootinit() {JBROOT=strdup(getenv("JBROOT"));}
-#define jbroot(path) ({ \
-    char *outPath = alloca(PATH_MAX); \
-    strlcpy(outPath, JBROOT, PATH_MAX); \
-    strlcat(outPath, path, PATH_MAX); \
-    (outPath); \
-})
 
 extern void NSLog(CFStringRef, ...);
 
@@ -378,8 +370,6 @@ bool isAppPath( char* path)
 
 __attribute__((constructor))
 static void injection_init(void) {
-    
-    jbrootinit();
     
     char* msSafe = getenv("_MSSafeMode");
     if (msSafe && atoi(msSafe) == 1) {

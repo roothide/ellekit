@@ -115,8 +115,6 @@ let allSignals = [
 @_cdecl("tweak_entry")
 public func tweak_entry() {
     
-    jbrootinit()
-        
     NSLog("MobileSafety: Hello world, SpringBoard!")
                 
     if FileManager.default.fileExists(atPath: jbroot("/var/mobile/.eksafemode")) {
