@@ -86,7 +86,7 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
         
     plistPath = CFStringCreateWithCString(kCFAllocatorDefault, path, kCFStringEncodingUTF8);
 
-    if (access(path, F_OK) != F_OK) {
+    if (access(path, F_OK) != 0) {
         free(path);
         CFRelease(plistPath);
         return false;

@@ -15,7 +15,7 @@
 #include <mach/thread_status.h>
 #include "include/mach.h"
 
-extern void EKLaunchExceptionHandler(void);
+extern mach_port_t EKLaunchExceptionHandler(void);
 extern void EKAddHookToRegistry(void* target, void* replacement);
 
 int hookCount = 0;
