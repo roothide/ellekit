@@ -17,8 +17,6 @@ bool g_isUIProcess = false;
 #define PROC_PIDPATHINFO_MAXSIZE  (1024)
 int proc_pidpath(pid_t pid, void *buffer, uint32_t buffersize);
 
-extern void NSLog(CFStringRef, ...);
-
 static bool rootless = false;
 
 static int filter_dylib(const struct dirent *entry) {
@@ -400,10 +398,6 @@ static void injection_init(void) {
             }
         }
     }
-    
-    if (!access(jbroot("/var/mobile/.eksafemode"), F_OK)) {
-        return;
-    }
 #endif
     
     const char* extension = getenv("SANDBOX_EXTENSION");
@@ -413,9 +407,12 @@ static void injection_init(void) {
     
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE] = {0};
     if (proc_pidpath(getpid(), pathbuf, sizeof(pathbuf)) > 0) {
-        if(isAppPath(pathbuf) || strstr(pathbuf, "/Applications/")
-           || strcmp(pathbuf, "/System/Library/CoreServices/SpringBoard.app/SpringBoard")==0)
+        if(isAppPath(pathbuf) || strstr(pathbuf, "/Applications/"))
             g_isUIProcess = true;
+    }
+    
+    if (g_isUIProcess && access(jbroot("/var/mobile/.eksafemode"), F_OK)==0) {
+        return;
     }
     
     tweaks_iterate();
