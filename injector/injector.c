@@ -6,6 +6,7 @@
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <objc/runtime.h>
+#include <libgen.h>
 #include <dirent.h>
 #include <dlfcn.h>
 #include <os/log.h>
@@ -13,9 +14,6 @@
 #include <roothide/roothide.h>
 
 bool g_isUIProcess = false;
-
-#define PROC_PIDPATHINFO_MAXSIZE  (1024)
-int proc_pidpath(pid_t pid, void *buffer, uint32_t buffersize);
 
 static bool rootless = false;
 
@@ -349,23 +347,6 @@ static void tweaks_iterate(void) {
     free(files);
 }
 
-#define APP_PATH_PREFIX "/private/var/containers/Bundle/Application/"
-bool isAppPath( char* path)
-{
-    if(strncmp(path, APP_PATH_PREFIX, sizeof(APP_PATH_PREFIX)-1) != 0)
-        return false;
-
-    char* p1 = path + sizeof(APP_PATH_PREFIX)-1;
-    char* p2 = strchr(p1, '/');
-    if(!p2) return false;
-
-    //is normal app or jailbroken app/daemon?
-    if((p2 - p1) != (sizeof("xxxxxxxx-xxxx-xxxx-yxxx-xxxxxxxxxxxx")-1))
-        return false;
-
-    return true;
-}
-
 __attribute__((constructor))
 static void injection_init(void) {
     
@@ -388,9 +369,6 @@ static void injection_init(void) {
     
     if (CFBundleGetMainBundle() && CFBundleGetIdentifier(CFBundleGetMainBundle())) {
         if (CFEqual(CFBundleGetIdentifier(CFBundleGetMainBundle()), CFSTR("com.apple.springboard"))) {
-            
-            g_isUIProcess = true;
-            
             if (rootless) {
                 dlopen(MOBILESAFETY_PATH_ROOTLESS, RTLD_NOW);
             } else {
@@ -405,10 +383,18 @@ static void injection_init(void) {
         sandbox_extension_consume(extension);
     }
     
-    char pathbuf[PROC_PIDPATHINFO_MAXSIZE] = {0};
-    if (proc_pidpath(getpid(), pathbuf, sizeof(pathbuf)) > 0) {
-        if(isAppPath(pathbuf) || strstr(pathbuf, "/Applications/"))
-            g_isUIProcess = true;
+    
+    char exepath[PATH_MAX]={0};
+    uint32_t bufsize=sizeof(exepath);
+    if(_NSGetExecutablePath(exepath, &bufsize) == 0) {
+        const char* dirpath = dirname(exepath);
+        const char* dot = strrchr(dirpath, '.');
+        if(dot) {
+            const char* ext = dot+1;
+            if(strcmp(ext,"app")==0 || strcmp(ext,"appex")==0) {
+                g_isUIProcess = true;
+            }
+        }
     }
     
     if (g_isUIProcess && access(jbroot("/var/mobile/.eksafemode"), F_OK)==0) {

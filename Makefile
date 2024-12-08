@@ -1,6 +1,6 @@
 .PHONY: all deb-ios-rootless deb-ios-rootful
 
-VERSION = 1.1.3
+VERSION = 1.1.3-1
 
 COMMON_OPTIONS = BUILD_DIR="build/" CODE_SIGNING_ALLOWED="NO" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_IDENTITY="" -configuration $(CONFIGURATION)
 
@@ -102,6 +102,7 @@ deb-ios-rootful deb-ios-rootless deb-ios-roothide: build-ios
 	@sed -e "s|@DEB_VERSION@|$(DEB_VERSION)|g" -e "s|@DEB_ARCH@|$(ARCHITECTURE)|g" -e "s|@INSTALL_PREFIX@|$(INSTALL_PREFIX)|g" packaging/postrm >$(STAGE_DIR)/DEBIAN/postrm
 	@chmod 0755 $(STAGE_DIR)/DEBIAN/preinst $(STAGE_DIR)/DEBIAN/postinst $(STAGE_DIR)/DEBIAN/postrm
 
+	@rm -rf packages
 	@mkdir -p packages
 	dpkg-deb --root-owner-group -b $(STAGE_DIR) packages/ellekit_$(DEB_VERSION)_$(ARCHITECTURE).deb
 	
@@ -134,6 +135,7 @@ deb-macos: build-macos
 	@mkdir -p $(INSTALL_ROOT)/usr/local/share/doc/ellekit
 	@install -m644 LICENSE $(INSTALL_ROOT)/usr/local/share/doc/ellekit/LICENSE
 	
+	@rm -rf packages
 	@mkdir -p packages
 	@tar -czvf packages/ellekit_$(DEB_VERSION)_$(ARCHITECTURE).tar.gz -C ./$(STAGE_DIR) .
 	@rm -rf work-$(ARCHITECTURE)
