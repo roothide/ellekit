@@ -28,6 +28,62 @@ extension UIViewController {
     }
 }
 
+func showSafeModeAlert()
+{
+    let title = "Safe Mode"
+    let message = "You've entered safe mode. SpringBoard tweaks will not get injected until you respring your device. You can select Dismiss to safely remove your broken tweaks."
+    DispatchQueue.main.async(execute: {
+        NSLog("MobileSafety: async executed")
+        guard let alertWindow = UIApplication.shared.keyWindow else { return }
+        
+        alertWindow.rootViewController = alertWindow.rootViewController?.top
+    
+        let alert2 = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        
+        let defaultAction2 = UIAlertAction(title: "Dismiss", style: .default, handler: { action in
+            try? FileManager.default.removeItem(atPath: jbroot("/var/mobile/.eksafemode"))
+        })
+        
+        alert2.addAction(defaultAction2)
+        
+
+        let respringAction2 = UIAlertAction(title: "Exit Safe Mode", style: .destructive, handler: { action in
+            try? FileManager.default.removeItem(atPath: jbroot("/var/mobile/.eksafemode"))
+            exit(0)
+        })
+        
+        alert2.addAction(respringAction2)
+    
+        alertWindow.makeKeyAndVisible()
+    
+        alertWindow.rootViewController?.present(alert2, animated: true, completion: nil)
+    })
+}
+
+func showBrokenPackageAlert()
+{
+    let title = "Error"
+    let message = "Ellekit files are corrupted for unknown reasons. Please try reinstalling the ellekit package."
+    DispatchQueue.main.async(execute: {
+        NSLog("MobileSafety: async executed")
+        guard let alertWindow = UIApplication.shared.keyWindow else { return }
+        
+        alertWindow.rootViewController = alertWindow.rootViewController?.top
+    
+        let alert2 = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        
+        let defaultAction2 = UIAlertAction(title: "Dismiss", style: .destructive, handler: { action in
+            try? FileManager.default.removeItem(atPath: jbroot("/var/mobile/.eksafemode"))
+        })
+        
+        alert2.addAction(defaultAction2)
+    
+        alertWindow.makeKeyAndVisible()
+    
+        alertWindow.rootViewController?.present(alert2, animated: true, completion: nil)
+    })
+}
+
 @objc class SpringBoard2: NSObject {
     
     @objc func applicationDidFinishLaunching(_ application: UIApplication) {
@@ -38,35 +94,21 @@ extension UIViewController {
         
         block(self, #selector(UIApplicationDelegate.applicationDidFinishLaunching(_:)), application)
         
-        let title = "Safe Mode"
-        let message = "You've entered safe mode. SpringBoard tweaks will not get injected until you respring your device. You can select Dismiss to safely remove your broken tweaks."
-        DispatchQueue.main.async(execute: {
-            NSLog("MobileSafety: async executed")
-            guard let alertWindow = UIApplication.shared.keyWindow else { return }
-            
-            alertWindow.rootViewController = alertWindow.rootViewController?.top
         
-            let alert2 = UIAlertController(title: title, message: message, preferredStyle: .alert)
-            
-            let defaultAction2 = UIAlertAction(title: "Dismiss", style: .default, handler: { action in
-                try? FileManager.default.removeItem(atPath: jbroot("/var/mobile/.eksafemode"))
-            })
-            
-            alert2.addAction(defaultAction2)
-            
+        var isSymbolicLink = false
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: jbroot("/Library/MobileSubstrate/DynamicLibraries")) {
+            if let fileType = attributes[FileAttributeKey.type] as? FileAttributeType,
+               fileType == .typeSymbolicLink {
+                isSymbolicLink = true
+            }
+        }
 
-            let respringAction2 = UIAlertAction(title: "Exit Safe Mode", style: .destructive, handler: { action in
-                try? FileManager.default.removeItem(atPath: jbroot("/var/mobile/.eksafemode"))
-                exit(0)
-            })
-            
-            alert2.addAction(respringAction2)
+        if !isSymbolicLink {
+            showBrokenPackageAlert();
+            return
+        }
         
-            alertWindow.makeKeyAndVisible()
-        
-            alertWindow.rootViewController?.present(alert2, animated: true, completion: nil)
-        })
-        
+        showSafeModeAlert()
     }
 }
 

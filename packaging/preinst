@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+shopt -s dotglob
+
 abort() {
     echo "Error: $*" >&2
     exit 1
@@ -8,7 +10,7 @@ abort() {
 OLDPATH="@INSTALL_PREFIX@/Library/MobileSubstrate/DynamicLibraries"
 NEWPATH="@INSTALL_PREFIX@/usr/lib/TweakInject"
 
-if [ "$1" != "install" ]; then
+if [ "$1" != "install" && "$1" != "upgrade" ]; then
     exit 0
 fi
 
@@ -22,8 +24,10 @@ fi
 
 if ! [ -L "$OLDPATH" ]; then
     if [ -d "$OLDPATH" ]; then
+      if [ -n "$(ls -A "$OLDPATH")" ]; then
         mv "$OLDPATH"/* "$NEWPATH" || abort "Failed to copy DynamicLibraries to TweakInject"
-        rm -rf "$OLDPATH" || abort "Failed to remove DynamicLibraries"
+      fi
+        rm -d "$OLDPATH" || abort "Failed to remove DynamicLibraries"
     fi
     if [ -e "$OLDPATH" ]; then
         # WTF?

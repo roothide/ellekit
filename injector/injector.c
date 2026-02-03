@@ -12,6 +12,15 @@
 #include <os/log.h>
 #include <mach-o/dyld.h>
 #include <roothide/roothide.h>
+#include <sys/stat.h>
+
+#define OS_REASON_DYLD          6
+#define DYLD_EXIT_REASON_OTHER                  9
+void abort_with_payload(uint32_t reason_namespace, uint64_t reason_code, void *payload, uint32_t payload_size, const char *reason_string, uint64_t reason_flags) __attribute__((noreturn, cold));
+
+#define ABORT_WITH(...) do {  char* pinfo=NULL; asprintf(&pinfo, __VA_ARGS__); \
+            abort_with_payload(OS_REASON_DYLD,DYLD_EXIT_REASON_OTHER,NULL,0, pinfo, 0); \
+            free(pinfo); } while(0)
 
 bool g_isUIProcess = false;
 
@@ -399,6 +408,13 @@ static void injection_init(void) {
     
     if (g_isUIProcess && access(jbroot("/var/mobile/.eksafemode"), F_OK)==0) {
         return;
+    }
+    
+    if(strstr(exepath, ".app/")) {
+        struct stat st={0};
+        if(lstat(jbroot("/Library/MobileSubstrate/DynamicLibraries"), &st)!=0 || !S_ISLNK(st.st_mode)) {
+            ABORT_WITH("Ellekit files are corrupted! Try reinstalling ellekit package.");
+        }
     }
     
     tweaks_iterate();

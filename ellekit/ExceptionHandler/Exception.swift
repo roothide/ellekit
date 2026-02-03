@@ -71,11 +71,11 @@ public final class ExceptionHandler {
 
         let krt1 = mach_msg(
             msg_header,
-            MACH_RCV_MSG | MACH_RCV_LARGE | Int32(MACH_MSG_TIMEOUT_NONE),
+            MACH_RCV_MSG | MACH_RCV_LARGE,
             0,
             mach_msg_size_t(vm_page_size),
             self.port,
-            0,
+            MACH_MSG_TIMEOUT_NONE,
             0
         )
         
