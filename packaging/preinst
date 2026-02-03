@@ -10,7 +10,7 @@ abort() {
 OLDPATH="@INSTALL_PREFIX@/Library/MobileSubstrate/DynamicLibraries"
 NEWPATH="@INSTALL_PREFIX@/usr/lib/TweakInject"
 
-if [ "$1" != "install" && "$1" != "upgrade" ]; then
+if [ "$1" != "install" ] && [ "$1" != "upgrade" ]; then
     exit 0
 fi
 
