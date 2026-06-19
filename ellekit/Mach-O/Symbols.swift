@@ -15,38 +15,55 @@ enum SymbolErr: Error {
     case badCachePath
 }
 
+/// Mirrors dyld's `MachOAnalyzer::inCodeSection`: decides whether a resolved
+/// symbol pointer should be PAC-signed the same way `dlsym` would.
+///
+/// dlsym only signs the returned pointer when **both** runtime conditions hold
+/// (the compile-time `ptrauth_calls` condition is already handled inside
+/// `sign_pointer`):
+///   - the target image is arm64e (cputype/subtype check), and
+///   - the symbol's address lands in a section flagged with instruction
+///     attributes (i.e. it points to code, not data).
+///
+/// `vmaddr` must be the symbol's *unslid* link-time address (`nlist_64.n_value`),
+/// which shares the same address space as each `section_64.addr` in the
+/// in-memory load commands, so no slide adjustment is needed here.
+func symbolTargetIsCode(image machHeaderPointer: UnsafeRawPointer, vmaddr: UInt64) -> Bool {
+
+    let machHeader = machHeaderPointer.assumingMemoryBound(to: mach_header_64.self).pointee
+
+    // Condition: image must be arm64e (capability bits masked off).
+    let subtype = UInt32(bitPattern: machHeader.cpusubtype) & ~UInt32(CPU_SUBTYPE_MASK)
+    guard machHeader.cputype == CPU_TYPE_ARM64, subtype == UInt32(CPU_SUBTYPE_ARM64E) else {
+        return false
+    }
+
+    let codeAttrs = UInt32(S_ATTR_PURE_INSTRUCTIONS) | UInt32(S_ATTR_SOME_INSTRUCTIONS)
+
+    var command = machHeaderPointer.advanced(by: MemoryLayout<mach_header_64>.size)
+    for _ in 0..<machHeader.ncmds {
+        let load_command = command.assumingMemoryBound(to: load_command.self).pointee
+        if load_command.cmd == LC_SEGMENT_64 {
+            let segment = command.assumingMemoryBound(to: segment_command_64.self).pointee
+            var sectionPtr = command.advanced(by: MemoryLayout<segment_command_64>.size)
+            for _ in 0..<segment.nsects {
+                let section = sectionPtr.assumingMemoryBound(to: section_64.self).pointee
+                if vmaddr >= section.addr, vmaddr < section.addr &+ section.size {
+                    return (section.flags & codeAttrs) != 0
+                }
+                sectionPtr = sectionPtr.advanced(by: MemoryLayout<section_64>.size)
+            }
+        }
+        command = command.advanced(by: Int(load_command.cmdsize))
+    }
+    return false
+}
+
 // Thanks to opa334 for the help
 public func findSymbol(
     image machHeaderPointer: UnsafeRawPointer,
     symbol symbolName: String
 ) throws -> UnsafeRawPointer? {
-    
-    var machHeaderPointer = machHeaderPointer
-    
-    if machHeaderPointer.assumingMemoryBound(to: mach_header_64.self).pointee.magic == FAT_CIGAM {
-        // we have a fat binary
-        // get our current cpu subtype
-        let nslices = machHeaderPointer
-            .advanced(by: 0x4)
-            .assumingMemoryBound(to: UInt32.self)
-            .pointee.bigEndian
-        
-        for i in 0..<nslices {
-            let slice = machHeaderPointer
-                .advanced(by: 8 + (Int(i) * 20))
-                .assumingMemoryBound(to: fat_arch.self)
-                .pointee
-            #if arch(arm64)
-            if slice.cputype.bigEndian == CPU_TYPE_ARM64 { // hope that there's no arm64e subtype
-                machHeaderPointer = machHeaderPointer.advanced(by: Int(slice.offset.bigEndian))
-            }
-            #else
-            if slice.cputype.bigEndian == CPU_TYPE_X86_64 {
-                machHeaderPointer = machHeaderPointer.advanced(by: Int(slice.offset.bigEndian))
-            }
-            #endif
-        }
-    }
     
     let machHeader = machHeaderPointer.assumingMemoryBound(to: mach_header_64.self).pointee
         
@@ -70,7 +87,7 @@ public func findSymbol(
     
     var stroff: UInt64 = 0
     var symoff: UInt64 = 0
-    var slide: UInt64 = 0
+    var linkBase: UInt64 = 0
     
     // Second iteration: Resolve offsets by segments
     for _ in 0..<machHeader.ncmds {
@@ -79,14 +96,12 @@ public func findSymbol(
         if load_command.cmd == LC_SEGMENT_64 {
             let segment_command = command.assumingMemoryBound(to: segment_command_64.self).pointee
             
-            let segnameString = withUnsafePointer(to: segment_command.segname) {
-                $0.withMemoryRebound(to: UInt8.self, capacity: MemoryLayout.size(ofValue: $0)) {
-                    String(cString: $0)
-                }
+            let segnameString = withUnsafeBytes(of: segment_command.segname) { raw in
+                String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
             }
                                    
-            if slide == 0 && segnameString == "__TEXT" {
-                slide = segment_command.vmaddr
+            if linkBase == 0 && segnameString == "__TEXT" {
+                linkBase = segment_command.vmaddr
             } else if segnameString == "__LINKEDIT" {
                                 
                 if (UInt64(symtab_cmd.symoff) - segment_command.fileoff) < segment_command.filesize {
@@ -99,17 +114,21 @@ public func findSymbol(
                 
             }
             
-            if stroff != 0 && symoff != 0 && slide != 0 {
+            if stroff != 0 && symoff != 0 && linkBase != 0 {
                 break
             }
         }
         
         command = command.advanced(by: Int(load_command.cmdsize))
     }
+
+    guard stroff>0 && symoff>0 else {
+        throw SymbolErr.noSymbol
+    }
             
-    if slide != 0 {
-        stroff = stroff - slide
-        symoff = symoff - slide
+    if linkBase != 0 {
+        stroff = stroff - linkBase
+        symoff = symoff - linkBase
     }
             
     let strTab = machHeaderPointer
@@ -139,11 +158,19 @@ public func findSymbol(
                              
         if strcmp(name, symbolName) == 0 {
             
-            guard symbol.n_value != 0 else {
+            guard symbol.n_value != 0 && symbol.n_value >= linkBase else {
                 throw SymbolErr.noAddress
             }
-            
-            return UnsafeRawPointer(UnsafeMutableRawPointer(bitPattern: UInt(bitPattern: machHeaderPointer.advanced(by: Int(symbol.n_value - slide))))?.makeCallable())
+
+            guard let target = UnsafeMutableRawPointer(bitPattern: UInt(bitPattern: machHeaderPointer.advanced(by: Int(symbol.n_value - linkBase)))) else {
+                return nil
+            }
+
+            // Match dlsym: only PAC-sign when the target is code in an arm64e image.
+            if symbolTargetIsCode(image: machHeaderPointer, vmaddr: symbol.n_value) {
+                return UnsafeRawPointer(target.makeCallable())
+            }
+            return UnsafeRawPointer(target)
         }
     }
 

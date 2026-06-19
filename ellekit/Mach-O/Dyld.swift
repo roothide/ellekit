@@ -50,7 +50,8 @@ extension FileHandleC {
     @inline(__always)
     func readData(ofLength count: Int) -> UnsafeMutableRawPointer {
         let alloc = malloc(count)
-        fread(alloc, 1, count, self)
+        let read = fread(alloc, 1, count, self)
+        assert(read == count)
         return alloc!
     }
     
@@ -74,13 +75,13 @@ extension FileHandleC {
     }
 }
 
-func findDYLDSlide(image machHeaderPointer: UnsafeRawPointer) -> UInt64 {
+func getImageLinkBase(image machHeaderPointer: UnsafeRawPointer) -> UInt64 {
     
     let machHeader = machHeaderPointer
         .assumingMemoryBound(to: mach_header_64.self)
         .pointee
     
-    var slide: UInt64 = 0
+    var linkBase: UInt64 = 0
     
     // Read the load commands
     var command = machHeaderPointer.advanced(by: MemoryLayout<mach_header_64>.size)
@@ -92,14 +93,12 @@ func findDYLDSlide(image machHeaderPointer: UnsafeRawPointer) -> UInt64 {
         if load_command.cmd == LC_SEGMENT_64 {
             let segment_command = command.assumingMemoryBound(to: segment_command_64.self).pointee
             
-            let segnameString = withUnsafePointer(to: segment_command.segname) {
-                $0.withMemoryRebound(to: UInt8.self, capacity: MemoryLayout.size(ofValue: $0)) {
-                    String(cString: $0)
-                }
+            let segnameString = withUnsafeBytes(of: segment_command.segname) { raw in
+                String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
             }
                                    
-            if slide == 0 && segnameString == "__TEXT" {
-                slide = segment_command.vmaddr
+            if linkBase == 0 && segnameString == "__TEXT" {
+                linkBase = segment_command.vmaddr
                 break
             }
         }
@@ -107,7 +106,7 @@ func findDYLDSlide(image machHeaderPointer: UnsafeRawPointer) -> UInt64 {
         command = command.advanced(by: Int(load_command.cmdsize))
     }
     
-    return slide
+    return linkBase
 }
 
 public func findPrivateSymbol(
@@ -115,8 +114,6 @@ public func findPrivateSymbol(
     symbol symbolName: String,
     overrideCachePath: String? = nil
 ) throws -> UnsafeRawPointer? {
-            
-    let slide = findDYLDSlide(image: machHeaderPointer)
     
     guard let handle = fopen(overrideCachePath ?? sharedCacheSymbolsPath(), "r") else {
         print("[-] ellekit: failed to open shared cache")
@@ -140,40 +137,46 @@ public func findPrivateSymbol(
         .assumingMemoryBound(to: dyld_cache_local_symbols_info.self)
 
     var symInfo = symInfoPtr.pointee
+    
+    free(symInfoPtr)
         
     handle.seek(toFileOffset: entry.localSymbolsOffset + UInt64(symInfo.entriesOffset))
     
     var check: UInt64 = 0
     
     shared_region_check(&check)
+    
+    var inSharedCache = false
                     
     for _ in 0..<symInfo.entriesCount {
         let entryPtr = handle
             .readData(ofLength: MemoryLayout<dyld_cache_local_symbols_entry>.size)
             .assumingMemoryBound(to: dyld_cache_local_symbols_entry.self)
 
+        defer { free(entryPtr) }
+
         let entry = entryPtr.pointee
-                
+
         if UnsafeRawPointer(bitPattern: UInt(check + entry.dylibOffset)) == machHeaderPointer {
             symInfo.nlistOffset = entry.nlistStartIndex * UInt32(MemoryLayout<nlist_64>.size) + symInfo.nlistOffset
             symInfo.nlistCount = entry.nlistCount
-                        
+            inSharedCache = true
             break
         }
-        
-        free(entryPtr)
     }
+    
+    guard inSharedCache else { return nil }
+    
+    let linkBase = getImageLinkBase(image: machHeaderPointer)
     
     let strTab = entry.localSymbolsOffset + UInt64(symInfo.stringsOffset)
                     
     handle.seek(toFileOffset: entry.localSymbolsOffset + UInt64(symInfo.nlistOffset))
-    
-    defer { free(symInfoPtr) }
         
-    let cSymbolName = strdup((symbolName as NSString).utf8String)
-    
+    let cSymbolName: UnsafeMutablePointer<CChar> = strdup(symbolName)
+    let cSymbolNameLength = strlen(cSymbolName)
     defer { free(cSymbolName) }
-        
+    
     for idx in 0..<(symInfo.nlistCount) {
                         
         let symbolPtr = handle
@@ -185,22 +188,30 @@ public func findPrivateSymbol(
                         
         defer { free(symbolPtr) }
                 
-        guard symbol.n_un.n_strx != 0 && symbol.n_value != 0 && symbol.n_type != 115 && symbol.n_type != 17 else {
+        guard symbol.n_un.n_strx != 0 && symbol.n_value != 0 && symbol.n_value >= linkBase && symbol.n_type != 115 && symbol.n_type != 17 else {
             continue
         }
                 
         // Get the symbol's name from the string table
         let name = handle
             .seek(toFileOffset: strTab + UInt64(symbol.n_un.n_strx))
-            .readData(ofLength: symbolName.count + 1)
+            .readData(ofLength: cSymbolNameLength + 1)
             .assumingMemoryBound(to: CChar.self)
                 
         defer {
             free(name)
         }
                         
-        if strcmp(name, cSymbolName) == 0 {
-            return UnsafeRawPointer(bitPattern: UInt(bitPattern: machHeaderPointer.advanced(by: Int(symbol.n_value - slide))))
+        if strncmp(name, cSymbolName, cSymbolNameLength) == 0 && name[cSymbolNameLength] == 0 {
+            guard let target = UnsafeMutableRawPointer(bitPattern: UInt(bitPattern: machHeaderPointer.advanced(by: Int(symbol.n_value - linkBase)))) else {
+                return nil
+            }
+
+            // Match dlsym: only PAC-sign when the target is code in an arm64e image.
+            if symbolTargetIsCode(image: machHeaderPointer, vmaddr: symbol.n_value) {
+                return UnsafeRawPointer(target.makeCallable())
+            }
+            return UnsafeRawPointer(target)
         }
     }
     

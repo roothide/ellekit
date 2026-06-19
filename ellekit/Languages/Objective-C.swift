@@ -9,7 +9,7 @@ import Foundation
 @inlinable
 public func messageHook(_ cls: AnyClass, _ sel: Selector, _ imp: IMP, _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>?) {
 
-    guard let method = class_getInstanceMethod(cls, sel) ?? class_getClassMethod(cls, sel) else {
+    guard let method = class_getInstanceMethod(cls, sel) else {
         return
     }
 
@@ -30,10 +30,11 @@ public func messageHook(_ cls: AnyClass, _ sel: Selector, _ imp: IMP, _ result: 
 }
 
 @inlinable
-func hookIvar<T>(_ class: AnyClass, _ name: String) -> UnsafeMutablePointer<T>? {
-    let ivar = class_getInstanceVariable(object_getClass(`class`), name)
+func hookIvar<T>(_ object: AnyObject?, _ name: UnsafePointer<CChar>?) -> UnsafeMutablePointer<T>? {
+    guard let object, let name, let cls = object_getClass(object) else { return nil }
+    let ivar = class_getInstanceVariable(cls, name)
     if let ivar {
-        let ptr = unsafeBitCast(`class`, to: UnsafeMutableRawPointer.self).advanced(by: ivar_getOffset(ivar))
+        let ptr = Unmanaged.passUnretained(object).toOpaque().advanced(by: ivar_getOffset(ivar))
         return ptr.assumingMemoryBound(to: T.self)
     }
     return nil
@@ -42,7 +43,7 @@ func hookIvar<T>(_ class: AnyClass, _ name: String) -> UnsafeMutablePointer<T>? 
 // MSHookClassPair
 // thanks to faptain kink
 @inlinable
-public func hookClassPair(_ targetClass: AnyClass, _ hookClass: AnyClass, _ baseClass: AnyClass) {
+public func hookClassPair(_ targetClass: AnyClass, _ hookClass: AnyClass, _ stubClass: AnyClass?) {
     var method_count: UInt32 = 0
     guard let methods = class_copyMethodList(hookClass, &method_count) else {
         return
@@ -50,18 +51,18 @@ public func hookClassPair(_ targetClass: AnyClass, _ hookClass: AnyClass, _ base
     print("[*] ellekit: \(method_count) methods found in hooked class")
     for iter in 0..<Int(method_count) {
         let selector = method_getName(methods[iter])
-        print("[*] ellekit: hooked method is", sel_getName(selector))
+        print(["[*] ellekit: hooked method is", sel_getName(selector)])
         
-        let method_encoding = method_getTypeEncoding(methods[iter])
+        let hookImp = method_getImplementation(methods[iter])
+        let hookType = method_getTypeEncoding(methods[iter])
         
-        // If this is true we need to override the method
-        // Otherwise we can just add the method to the subclass
-        if let origImp = class_getInstanceMethod(baseClass, selector), let hookedImp = class_getInstanceMethod(targetClass, selector) {
-            class_addMethod(baseClass, selector, method_getImplementation(methods[iter]), method_encoding)
-            method_exchangeImplementations(hookedImp, origImp)
-            
+        if let original = class_getInstanceMethod(targetClass, selector) {
+            if let stubClass {
+                class_replaceMethod(stubClass, selector, method_getImplementation(original), method_getTypeEncoding(original))
+            }
+            class_replaceMethod(targetClass, selector, hookImp, hookType)
         } else {
-            class_addMethod(targetClass, selector, method_getImplementation(methods[iter]), method_encoding)
+            class_addMethod(targetClass, selector, hookImp, hookType)
         }
     }
     

@@ -69,33 +69,28 @@ public final class ExceptionHandler {
 
         defer { msg_header.deallocate() }
 
-        let krt1 = mach_msg(
-            msg_header,
-            MACH_RCV_MSG | MACH_RCV_LARGE,
-            0,
-            mach_msg_size_t(vm_page_size),
-            self.port,
-            MACH_MSG_TIMEOUT_NONE,
-            0
-        )
-        
-        guard krt1 == KERN_SUCCESS else {
-            return
-        }
-
-        let req = UnsafeMutableRawPointer(msg_header)
-            .makeReadable()
-            .withMemoryRebound(to: exception_raise_request.self, capacity: Int(vm_page_size)) { $0.pointee }
-
-        let thread_port = req.thread.name
-        
-        if thread_port == mach_thread_self() {
-            // somehow the exc handler crashed
+        while true {
+            let krt1 = mach_msg(
+                msg_header,
+                MACH_RCV_MSG | MACH_RCV_LARGE,
+                0,
+                mach_msg_size_t(vm_page_size),
+                self.port,
+                MACH_MSG_TIMEOUT_NONE,
+                0
+            )
             
-            fatalError("Exception handler stack overflow blocked")
-        }
+            guard krt1 == KERN_SUCCESS else {
+                print(["[-] couldn't receive exception:", String(cString: mach_error_string(krt1))])
+                return
+            }
 
-        defer {
+            let req = UnsafeMutableRawPointer(msg_header)
+                .makeReadable()
+                .withMemoryRebound(to: exception_raise_request.self, capacity: Int(vm_page_size)) { $0.pointee }
+
+            let retCode = handle(req)
+
             var reply = exception_raise_reply()
             reply.Head.msgh_bits = req.Head.msgh_bits & UInt32(MACH_MSGH_BITS_REMOTE_MASK)
             reply.Head.msgh_size = mach_msg_size_t(MemoryLayout.size(ofValue: reply))
@@ -104,22 +99,36 @@ public final class ExceptionHandler {
             reply.Head.msgh_id = req.Head.msgh_id + 0x64
 
             reply.NDR = req.NDR
-            reply.RetCode = KERN_SUCCESS
+            reply.RetCode = retCode
 
-            mach_msg (
+            let krt2 = mach_msg (
                 &reply.Head,
-                1,
+                MACH_SEND_MSG,
                 reply.Head.msgh_size,
                 0,
                 mach_port_name_t(MACH_PORT_NULL),
                 MACH_MSG_TIMEOUT_NONE,
                 mach_port_name_t(MACH_PORT_NULL)
             )
-            
-            Self.portLoop(self)
+
+            if krt2 != KERN_SUCCESS {
+                print(["[-] couldn't reply to exception:", String(cString: mach_error_string(krt2))])
+            }
+
+            if req.thread.name != MACH_PORT_NULL {
+                mach_port_deallocate(mach_task_self_, req.thread.name)
+            }
+
+            if req.task.name != MACH_PORT_NULL {
+                mach_port_deallocate(mach_task_self_, req.task.name)
+            }
         }
+    }
+
+    private static func handle(_ req: exception_raise_request) -> kern_return_t {
 
         #if arch(x86_64)
+        return KERN_FAILURE
         #else
 
         var state = arm_thread_state64()
@@ -127,28 +136,32 @@ public final class ExceptionHandler {
 
         let krt2 = withUnsafeMutablePointer(to: &state) {
             $0.withMemoryRebound(to: UInt32.self, capacity: MemoryLayout<arm_thread_state64>.size) {
-                thread_get_state(thread_port, ARM_THREAD_STATE64, $0, &stateCnt)
+                thread_get_state(req.thread.name, ARM_THREAD_STATE64, $0, &stateCnt)
             }
         }
 
         guard krt2 == KERN_SUCCESS else {
             print("[-] couldn't get state for thread")
-            return
+            return krt2
         }
 
         #if _ptrauth(_arm64e)
         guard let formerPtr = state.__opaque_pc?.makeReadable() else {
             print("[-] couldn't get ptr from pc reg")
-            return
+            return KERN_FAILURE
         }
         #else
         guard let formerPtr = UnsafeMutableRawPointer(bitPattern: UInt(state.__pc)) else {
             print("[-] couldn't get ptr from pc reg")
-            return
+            return KERN_FAILURE
         }
         #endif
         
-        if let newPtr = hooks[formerPtr] {
+        let newPtr: UnsafeMutableRawPointer? = withHooksLock { hooks in
+            hooks[formerPtr]
+        }
+
+        if let newPtr {
 
             #if _ptrauth(_arm64e)
             state.__opaque_pc = sign_pc(newPtr)
@@ -158,18 +171,19 @@ public final class ExceptionHandler {
 
             let krt_set = withUnsafeMutablePointer(to: &state, {
                 $0.withMemoryRebound(to: UInt32.self, capacity: MemoryLayout<arm_thread_state64>.size, {
-                    thread_set_state(thread_port, ARM_THREAD_STATE64, $0, mach_msg_type_number_t(ARM_THREAD_STATE64_COUNT))
+                    thread_set_state(req.thread.name, ARM_THREAD_STATE64, $0, mach_msg_type_number_t(ARM_THREAD_STATE64_COUNT))
                 })
             })
 
             guard krt_set == KERN_SUCCESS else {
                 print("[-] couldn't set state for thread")
-                return
+                return krt_set
             }
-                                    
-            thread_resume(thread_port)
+
+            return KERN_SUCCESS
         } else {
-            exit(1) // idk what i should do
+            // Not one of ElleKit's BRK hooks. Let the kernel/outer exception chain handle it.
+            return KERN_FAILURE
         }
         #endif
     }

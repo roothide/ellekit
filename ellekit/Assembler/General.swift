@@ -13,7 +13,7 @@ public protocol Instruction {
 }
 
 func ror(_ x: Int, _ y: Int) -> Int {
-    ((x >> y) | (x << (32 - y)) & 0xFFFFFFFF)
+    ((x >> y) | (x << (32 - y))) & 0xFFFFFFFF
 }
 
 extension Instruction {
@@ -154,7 +154,7 @@ public class svc: Instruction {
     let value: Int
 
     public init(_ sv: Int) {
-        self.value = 0x010000D4 | sv << 13
+        self.value = reverse(0xD4000001 | ((sv & 0xffff) << 5))
     }
 }
 
@@ -170,16 +170,49 @@ public class str: Instruction {
     let value: Int
 
     public init(_ rd: Register, _ dest: Register, _ offset: Int = 0) {
-        let destOffset = Int((Double(dest.value) / 10).rounded(.down))
-        var value = 0x000000F9 | dest.value << 29 | rd.value << 24 | offset << 20 | destOffset << 16
-        if offset > 0 {
-            value = value + 0xff
-        }
-        self.value = value
+        let size = rd.w ? 0b10 : 0b11
+        let scale = rd.w ? 4 : 8
+        var base = Self.base
+        base |= size << 30
+        base |= ((offset / scale) & 0xfff) << 10
+        base |= dest.value << 5
+        base |= rd.value
+        self.value = reverse(base)
     }
+
+    static let base = 0b00_111_0_01_00_000000000000_00000_00000
 }
 
+// Encodes LDR (immediate, unsigned offset). `offset` is a byte offset; imm12 is scaled by the access size.
+// FIX: this class previously emitted LDUR (wrong imm field layout) and lacked masking; it now
+// encodes a real LDR. Use `ldur` below if you need the unscaled/signed form.
 public class ldr: Instruction {
+    required public init(encoded: Int) {
+        self.value = encoded
+    }
+
+    public func bytes() -> [UInt8] {
+        byteArray(from: value)
+    }
+
+    let value: Int
+
+    public init(_ rt: Register, _ rn: Register, _ offset: Int = 0) {
+        let size = rt.w ? 0b10 : 0b11
+        let scale = rt.w ? 4 : 8
+        var base = Self.base
+        base |= size << 30
+        base |= ((offset / scale) & 0xfff) << 10
+        base |= rn.value << 5
+        base |= rt.value
+        self.value = reverse(base)
+    }
+
+    static let base = 0b00_111_0_01_01_000000000000_00000_00000
+}
+
+// Encodes LDUR (load register, unscaled SIGNED 9-bit immediate offset, -256...255).
+public class ldur: Instruction {
     required public init(encoded: Int) {
         self.value = encoded
     }
@@ -194,13 +227,84 @@ public class ldr: Instruction {
         let size = rt.w ? 0b10 : 0b11
         var base = Self.base
         base |= size << 30
-        base |= offset << 12
+        base |= (offset & 0x1ff) << 12     // imm9 (signed, 9 bits)
         base |= rn.value << 5
         base |= rt.value
         self.value = reverse(base)
     }
 
     static let base = 0b00_111_0_00_01_0_000000000_00_00000_00000
+}
+
+// Encodes LDRSW (immediate, unsigned offset): loads 32 bits and sign-extends into a 64-bit register.
+public class ldrsw: Instruction {
+    required public init(encoded: Int) {
+        self.value = encoded
+    }
+
+    public func bytes() -> [UInt8] {
+        byteArray(from: value)
+    }
+
+    let value: Int
+
+    public init(_ rt: Register, _ rn: Register, _ offset: Int = 0) {
+        var base = Self.base
+        base |= ((offset / 4) & 0xfff) << 10
+        base |= rn.value << 5
+        base |= rt.value
+        self.value = reverse(base)
+    }
+
+    static let base = 0b10_111_0_01_10_000000000000_00000_00000
+}
+
+// Encodes TBZ (test bit and branch if zero). `bit` is the bit number (0...63); `offset` is a byte offset.
+public class tbz: Instruction {
+    required public init(encoded: Int) {
+        self.value = encoded
+    }
+
+    public func bytes() -> [UInt8] {
+        byteArray(from: value)
+    }
+
+    let value: Int
+
+    public init(_ rt: Register, _ bit: Int, _ offset: Int) {
+        var base = Self.base
+        base |= ((bit >> 5) & 0x1) << 31           // b5
+        base |= (bit & 0x1f) << 19                 // b40
+        base |= ((offset / 4) & 0x3fff) << 5       // imm14
+        base |= rt.value
+        self.value = reverse(base)
+    }
+
+    static let base = 0b0_011011_0_00000_00000000000000_00000
+}
+
+// Encodes TBNZ (test bit and branch if nonzero). `bit` is the bit number (0...63); `offset` is a byte offset.
+public class tbnz: Instruction {
+    required public init(encoded: Int) {
+        self.value = encoded
+    }
+
+    public func bytes() -> [UInt8] {
+        byteArray(from: value)
+    }
+
+    let value: Int
+
+    public init(_ rt: Register, _ bit: Int, _ offset: Int) {
+        var base = Self.base
+        base |= ((bit >> 5) & 0x1) << 31           // b5
+        base |= (bit & 0x1f) << 19                 // b40
+        base |= ((offset / 4) & 0x3fff) << 5       // imm14
+        base |= rt.value
+        self.value = reverse(base)
+    }
+
+    static let base = 0b0_011011_1_00000_00000000000000_00000
 }
 
 public class nop: Instruction {
@@ -231,7 +335,7 @@ class adrp: Instruction {
     public init(_ rt: Register, _ label: Int = 0) {
         var base = Self.base
         let imm = (label >> 12)
-        let immlow = ((imm & 0x3) >> 29)
+        let immlow = ((imm & 0x3) << 29)
         let immhigh = ((imm >> 2) & 0x7ffff) << 5
         base |= immlow
         base |= immhigh

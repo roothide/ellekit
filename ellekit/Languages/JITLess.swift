@@ -15,7 +15,9 @@ public func launchExceptionHandler() -> mach_port_t {
 
 @_cdecl("EKAddHookToRegistry")
 public func addHookToRegistry(_ target: UnsafeMutableRawPointer, _ replacement: UnsafeMutableRawPointer) {
-    hooks[target] = replacement;
+    withHooksLock { hooks in
+        hooks[target] = replacement
+    }
 }
 
 @_silgen_name("EKJITLessHook")

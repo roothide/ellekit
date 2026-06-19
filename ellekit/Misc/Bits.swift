@@ -3,12 +3,20 @@
 // Copyright 2022 © Charlotte Belanger
 
 func reverse<T: FixedWidthInteger>(_ base: T) -> T {
-    ((base>>24)&0xff) | ((base<<8)&0xff0000) | ((base>>8)&0xff00) | ((base<<24)&0xff000000)
+    let b0: T = (base >> 24) & 0xff
+    let b1: T = (base << 8)  & 0xff0000
+    let b2: T = (base >> 8)  & 0xff00
+    let b3: T = (base << 24) & 0xff000000
+    return b0 | b1 | b2 | b3
 }
 
 extension FixedWidthInteger {
     public func reverse() -> Self {
-        ((self>>24)&0xff) | ((self<<8)&0xff0000) | ((self>>8)&0xff00) | ((self<<24)&0xff000000)
+        let b0: Self = (self >> 24) & 0xff
+        let b1: Self = (self << 8)  & 0xff0000
+        let b2: Self = (self >> 8)  & 0xff00
+        let b3: Self = (self << 24) & 0xff000000
+        return b0 | b1 | b2 | b3
     }
 }
 

@@ -1,6 +1,6 @@
 .PHONY: all deb-ios-rootless deb-ios-rootful
 
-VERSION = 1.1.3-3
+VERSION = 1.1.3-4~beta1
 
 COMMON_OPTIONS = BUILD_DIR="build/" CODE_SIGNING_ALLOWED="NO" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_IDENTITY="" -configuration $(CONFIGURATION)
 
@@ -41,8 +41,8 @@ clean:
 build-ios:
 	xcodebuild -scheme ellekit $(COMMON_OPTIONS)
 	xcodebuild -scheme injector $(COMMON_OPTIONS)
-	# xcodebuild -scheme launchd $(COMMON_OPTIONS)
-	# xcodebuild -scheme loader $(COMMON_OPTIONS)
+# 	xcodebuild -scheme launchd $(COMMON_OPTIONS)
+# 	xcodebuild -scheme loader $(COMMON_OPTIONS)
 	xcodebuild -scheme safemode-ui $(COMMON_OPTIONS)
 
 build-macos:
@@ -65,16 +65,16 @@ deb-ios-rootful deb-ios-rootless deb-ios-roothide: build-ios
 
 	@# Because BSD install does not support -D
 	@mkdir -p $(INSTALL_ROOT)/usr/lib/ellekit
-	@mkdir -p $(INSTALL_ROOT)/usr/libexec/ellekit
+# 	@mkdir -p $(INSTALL_ROOT)/usr/libexec/ellekit
 
 	@install -m644 $(PRODUCTS_DIR)/libellekit.dylib $(INSTALL_ROOT)/usr/lib/libellekit.dylib
 	@install -m644 $(PRODUCTS_DIR)/libinjector.dylib $(INSTALL_ROOT)/usr/lib/ellekit/libinjector.dylib
-	@install -m644 $(PRODUCTS_DIR)/pspawn.dylib $(INSTALL_ROOT)/usr/lib/ellekit/pspawn.dylib
+# 	@install -m644 $(PRODUCTS_DIR)/pspawn.dylib $(INSTALL_ROOT)/usr/lib/ellekit/pspawn.dylib
 	@install -m644 $(PRODUCTS_DIR)/libsafemode-ui.dylib $(INSTALL_ROOT)/usr/lib/ellekit/MobileSafety.dylib
-	@install -m755 $(PRODUCTS_DIR)/loader $(INSTALL_ROOT)/usr/libexec/ellekit/loader
+# 	@install -m755 $(PRODUCTS_DIR)/loader $(INSTALL_ROOT)/usr/libexec/ellekit/loader
 
 	@find $(INSTALL_ROOT)/usr/lib -type f -exec ldid -S {} \;
-	@ldid -S./loader/taskforpid.xml $(INSTALL_ROOT)/usr/libexec/ellekit/loader
+# 	@ldid -S./loader/taskforpid.xml $(INSTALL_ROOT)/usr/libexec/ellekit/loader
 	
 	@ln -s $(INSTALL_PREFIX)/usr/lib/ellekit/libinjector.dylib $(INSTALL_ROOT)/usr/lib/TweakLoader.dylib
 	@ln -s $(INSTALL_PREFIX)/usr/lib/ellekit/libinjector.dylib $(INSTALL_ROOT)/usr/lib/TweakInject.dylib
@@ -82,8 +82,8 @@ deb-ios-rootful deb-ios-rootless deb-ios-roothide: build-ios
 	@ln -s $(INSTALL_PREFIX)/usr/lib/libellekit.dylib $(INSTALL_ROOT)/usr/lib/libhooker.dylib
 	@ln -s $(INSTALL_PREFIX)/usr/lib/libellekit.dylib $(INSTALL_ROOT)/usr/lib/libblackjack.dylib
 
-	@mkdir -p $(INSTALL_ROOT)/etc/rc.d
-	@ln -s ${INSTALL_PREFIX}/usr/libexec/ellekit/loader $(INSTALL_ROOT)/etc/rc.d/ellekit-loader
+# 	@mkdir -p $(INSTALL_ROOT)/etc/rc.d
+# 	@ln -s ${INSTALL_PREFIX}/usr/libexec/ellekit/loader $(INSTALL_ROOT)/etc/rc.d/ellekit-loader
 
 	@mkdir -p $(INSTALL_ROOT)/usr/lib/TweakInject
 

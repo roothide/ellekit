@@ -11,7 +11,7 @@ import ellekitc
 
 func executeAssemblyBytes<T>(returnType: T.Type, _ code: [UInt8]) -> T {
     code.withUnsafeBufferPointer { buf in
-        let size = MemoryLayout.size(ofValue: code) * code.count
+        let size = MemoryLayout<UInt8>.stride * code.count
         let result = executeRawByteArray(buf.baseAddress!, size)
         return unsafeBitCast(result, to: T.self)
     }
@@ -19,7 +19,7 @@ func executeAssemblyBytes<T>(returnType: T.Type, _ code: [UInt8]) -> T {
 
 func executeAssemblyBytes(_ code: [UInt8]) {
     code.withUnsafeBufferPointer { buf in
-        let size = MemoryLayout.size(ofValue: code) * code.count
+        let size = MemoryLayout<UInt8>.stride * code.count
         _ = executeRawByteArray(buf.baseAddress!, size)
     }
 }
@@ -31,7 +31,7 @@ func execWithRelativePtr(@InstructionBuilder _ instructions: (mach_vm_address_t)
     mach_vm_protect(mach_task_self_, addr, UInt64(vm_page_size), 0, VM_PROT_READ | VM_PROT_WRITE)
 
     let code = instructions(addr)
-    let codesize = MemoryLayout.size(ofValue: code) * (code.count)
+    let codesize = MemoryLayout<UInt8>.stride * (code.count)
 
     memcpy(UnsafeMutableRawPointer(bitPattern: UInt(addr)), code, codesize)
     mach_vm_protect(mach_task_self_, addr, UInt64(vm_page_size), 0, VM_PROT_READ | VM_PROT_EXECUTE)
@@ -68,11 +68,11 @@ public func asm(@InstructionBuilder _ instructions: () -> [UInt8]) {
 
 func dumpInstructions(_ array: [Instruction]) {
     array.forEach {
-        print(
+        print([
             type(of: $0),
             $0.bytes().map { "0x" + String(format: "%02X", $0) }.joined(separator: ", "),
             $0.bytes().map { String(format: "%02X", $0) }.joined()
-        )
+        ])
     }
 }
 

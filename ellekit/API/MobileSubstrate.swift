@@ -6,8 +6,8 @@ import ObjectiveC
 import MachO
 
 @_cdecl("MSGetImageByName")
-public func MSGetImageByName(_ name: UnsafeRawPointer) -> UnsafeRawPointer? {
-    if let image = try? ellekit.openImage(image: String(cString: name.assumingMemoryBound(to: CChar.self))) {
+public func MSGetImageByName(_ filename: UnsafeRawPointer) -> UnsafeRawPointer? {
+    if let image = try? ellekit.openImage(image: String(cString: filename.assumingMemoryBound(to: CChar.self))) {
         return .init(image)
     }
     return nil
@@ -25,9 +25,6 @@ public func MSFindSymbol(_ image: UnsafeRawPointer?, _ name: UnsafeRawPointer?) 
     if let image {
         
         let swiftName = String(cString: name.assumingMemoryBound(to: CChar.self))
-        if swiftName.first == "_", let symbol = dlsym(UnsafeMutableRawPointer(mutating: image), String(swiftName.dropFirst())) {
-            return .init(symbol)
-        }
         
         #if os(macOS)
         if let symbol = try? ellekit.findSymbol(image: image, symbol: swiftName) {
@@ -54,17 +51,8 @@ public func MSFindSymbol(_ image: UnsafeRawPointer?, _ name: UnsafeRawPointer?) 
     } else {
         for img in 0..<_dyld_image_count() {
             if let hdr = _dyld_get_image_header(img) {
-                let swiftName = String(cString: name.assumingMemoryBound(to: CChar.self))
-                if swiftName.first == "_", let symbol = dlsym(UnsafeMutableRawPointer(mutating: UnsafeRawPointer(hdr)), String(swiftName.dropFirst())) {
-                    return .init(symbol)
-                }
-                if #available(iOS 14.0, macOS 11.0, *) {
-                    if _dyld_shared_cache_contains_path(_dyld_get_image_name(img)), let symbol = try? ellekit.findPrivateSymbol(image: hdr, symbol: swiftName) {
-                        return .init(symbol)
-                    }
-                }
-                if let symbol = try? ellekit.findSymbol(image: hdr, symbol: swiftName) {
-                    return .init(symbol)
+                if let result = MSFindSymbol(hdr, name) {
+                    return result
                 }
             }
         }
@@ -74,25 +62,12 @@ public func MSFindSymbol(_ image: UnsafeRawPointer?, _ name: UnsafeRawPointer?) 
 
 @_cdecl("MSHookFunction")
 public func MSHookFunction(_ symbol: UnsafeMutableRawPointer, _ replace: UnsafeMutableRawPointer, _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>?) {
-    
-//    let enforceThreadSafety = enforceThreadSafety
-//    if enforceThreadSafety {
-//        stopAllThreads()
-//    }
-    
-    let orig: UnsafeMutableRawPointer? = hook(symbol, replace, result)
-//    if let result, let orig {
-//        result.pointee = orig
-//    }
-    
-//    if enforceThreadSafety {
-//        resumeAllThreads()
-//    }
+    hook(symbol, replace, result)
 }
 
 @_cdecl("MSHookClassPair")
-public func MSHookClassPair(_ targetClass: AnyClass, _ hookClass: AnyClass, _ baseClass: AnyClass) {
-    hookClassPair(targetClass, hookClass, baseClass)
+public func MSHookClassPair(_ targetClass: AnyClass, _ hookClass: AnyClass, _ stubClass: AnyClass?) {
+    hookClassPair(targetClass, hookClass, stubClass)
 }
 
 @_cdecl("MSHookMessageEx")
@@ -101,13 +76,13 @@ public func MSHookMessageEx(_ cls: AnyClass, _ sel: Selector, _ imp: IMP, _ resu
 }
 
 @_cdecl("MSHookMemory")
-public func MSHookMemory(_ target: UnsafeMutableRawPointer, _ code: UnsafePointer<UInt8>!, _ size: mach_vm_size_t) {
-    rawHook(address: target, code: code, size: size)
+public func MSHookMemory(_ target: UnsafeMutableRawPointer, _ code: UnsafeMutableRawPointer, _ size: mach_vm_size_t) {
+    rawHook(address: target.makeReadable(), code: code.makeReadable().assumingMemoryBound(to: UInt8.self), size: size)
 }
 
 @_cdecl("MSHookIvar")
-public func MSHookIvar(_ class: AnyClass, _ name: String) -> UnsafeMutableRawPointer? {
-    let ptr: UnsafeMutablePointer<Any>? = hookIvar(`class`, name)
+public func MSHookIvar(_ object: AnyObject?, _ name: UnsafePointer<CChar>?) -> UnsafeMutableRawPointer? {
+    let ptr: UnsafeMutablePointer<Any>? = hookIvar(object, name)
     if let ptr {
         return .init(ptr)
     } else {

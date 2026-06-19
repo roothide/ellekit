@@ -5,25 +5,57 @@
 import Foundation
 
 func getAllThreads() -> [thread_act_t] {
-    let act_list: UnsafeMutablePointer<thread_act_array_t?> = .allocate(capacity: 100)
-    var count: UInt32 = 0
-    guard task_threads(mach_task_self_, act_list, &count) == KERN_SUCCESS else {
+    var threadList: thread_act_array_t?
+    var threadCount = mach_msg_type_number_t(0)
+
+    let kr = task_threads(mach_task_self_, &threadList, &threadCount)
+    guard kr == KERN_SUCCESS, let threadList else {
         return []
     }
-    let threadArray = act_list.pointee?.withMemoryRebound(to: thread_act_t.self, capacity: MemoryLayout<thread_act_t>.size * Int(count), { ptr in
-        Array(UnsafeMutableBufferPointer(start: ptr, count: Int(count)))
-    })
-    return threadArray ?? []
+
+    let threads = Array(
+        UnsafeBufferPointer(start: threadList, count: Int(threadCount))
+    )
+
+    let size = vm_size_t(threadCount) * vm_size_t(MemoryLayout<thread_act_t>.stride)
+    vm_deallocate(mach_task_self_, vm_address_t(UInt(bitPattern: threadList)), size)
+
+    return threads
 }
 
-public func stopAllThreads() {
+public func stopAllThreads() -> [thread_act_t] {
+    guard enforceThreadSafety else { return [] }
+
+    let task = mach_task_self_
+    let currentThread = mach_thread_self()
+    defer {
+        mach_port_deallocate(task, currentThread)
+    }
+
     var threads = getAllThreads()
-    threads.removeAll(where: { $0 == mach_thread_self() })
-    threads.forEach { thread_suspend($0) }
+
+    threads.removeAll { thread in
+        if thread == currentThread {
+            mach_port_deallocate(task, thread)
+            return true
+        }
+
+        let kr = thread_suspend(thread)
+        if kr != KERN_SUCCESS {
+            mach_port_deallocate(task, thread)
+            return true
+        }
+
+        return false
+    }
+
+    return threads
 }
 
-public func resumeAllThreads() {
-    var threads = getAllThreads()
-    threads.removeAll(where: { $0 == mach_thread_self() })
-    threads.forEach { thread_resume($0) }
+public func resumeAllThreads(_ threads: [thread_act_t]) {
+    guard enforceThreadSafety else { return }
+    threads.forEach {
+        thread_resume($0)
+        mach_port_deallocate(mach_task_self_, $0)
+    }
 }

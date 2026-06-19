@@ -22,14 +22,14 @@ public class sub: Instruction {
     }
 
     public init(_ rd: Register, _ rn: Register, _ imm: Int) {
-        self.value = encodeImm(Self.base, rd, rn, imm, 16)
+        self.value = encodeImm(Self.base, rd, rn, imm, 0)
     }
 
     public func bytes() -> [UInt8] {
         byteArray(from: self.value)
     }
 
-    static let base = 0b0_1_1_100010_0_000000000000_00000_00000
+    static let base = 0b0_1_0_100010_0_000000000000_00000_00000
 }
 
 public class add: Instruction {

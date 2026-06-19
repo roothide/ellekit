@@ -98,6 +98,8 @@
 		9EA498AA295662F10099A3ED /* Objective-C.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E48019B2910A04E007E433F /* Objective-C.swift */; };
 		9EA498AC295663240099A3ED /* PAC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E48019029108EF0007E433F /* PAC.swift */; };
 		9EA498AD2956633A0099A3ED /* ellekitc.m in Sources */ = {isa = PBXBuildFile; fileRef = 9E19B240291814CB00F8C4C7 /* ellekitc.m */; };
+		9EAA00022A20000100AB001 /* NearbyTrampoline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EAA00012A20000100AB001 /* NearbyTrampoline.swift */; };
+		9EAA00032A20000100AB002 /* NearbyTrampoline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EAA00012A20000100AB001 /* NearbyTrampoline.swift */; };
 		9EC2B2DF296B8CAE0079379D /* Load Commands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6EBF99296136A300D0D186 /* Load Commands.swift */; };
 		9EC2B2E1296B96350079379D /* Batch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EC2B2E0296B96350079379D /* Batch.swift */; };
 		9EC2B2E3296C774B0079379D /* button.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED5277E29673BC9009319AA /* button.swift */; };
@@ -231,6 +233,7 @@
 		9EA4989A29565D0B0099A3ED /* tweak.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = tweak.swift; sourceTree = "<group>"; };
 		9EA4989C29565D830099A3ED /* load.s */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.asm; path = load.s; sourceTree = "<group>"; };
 		9EA498A229565DC80099A3ED /* libsafemode-ui.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = "libsafemode-ui.dylib"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9EAA00012A20000100AB001 /* NearbyTrampoline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyTrampoline.swift; sourceTree = "<group>"; };
 		9EC2B2E0296B96350079379D /* Batch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Batch.swift; sourceTree = "<group>"; };
 		9EC2B2E5296C89920079379D /* Replacements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Replacements.swift; sourceTree = "<group>"; };
 		9ECAA39129FC61720024CB07 /* JITLess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITLess.swift; sourceTree = "<group>"; };
@@ -296,6 +299,7 @@
 			children = (
 				9E18B4AB2A142EAA002E471A /* Trampoline.swift */,
 				9E18B4A82A142E8D002E471A /* Trampoline+Location.swift */,
+				9EAA00012A20000100AB001 /* NearbyTrampoline.swift */,
 			);
 			path = Trampoline;
 			sourceTree = "<group>";
@@ -823,6 +827,7 @@
 				9E7DE7E9295293D2008E8BB4 /* entry.swift in Sources */,
 				9E70D387295FCA5B00B284F6 /* Register.swift in Sources */,
 				9E70D393295FCA5B00B284F6 /* Hook.swift in Sources */,
+				9EAA00022A20000100AB001 /* NearbyTrampoline.swift in Sources */,
 				9E68822429F9DB3200F9908F /* Symbols.swift in Sources */,
 				9E7DE81529529888008E8BB4 /* Tweak.swift in Sources */,
 				9E70D395295FCA5B00B284F6 /* Rebind.swift in Sources */,
@@ -870,6 +875,7 @@
 				9EA0CC7E293AEA550000E9AA /* Global.swift in Sources */,
 				9E92AAB4290D4E7A0018604C /* General.swift in Sources */,
 				9E92AAAF290D4E7A0018604C /* Hook.swift in Sources */,
+				9EAA00032A20000100AB002 /* NearbyTrampoline.swift in Sources */,
 				9E24704A2A0AFF9400D36A94 /* Dyld.swift in Sources */,
 				9E480192291090A3007E433F /* PAC.swift in Sources */,
 				9E6EBF9A296136A300D0D186 /* Load Commands.swift in Sources */,
@@ -938,7 +944,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_MODULES_DISABLE_PRIVATE_WARNING = YES;
 				CODE_SIGN_ENTITLEMENTS = "";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				DEAD_CODE_STRIPPING = YES;
@@ -948,7 +954,6 @@
 				EXCLUDED_ARCHS = "";
 				GCC_INCREASE_PRECOMPILED_HEADER_SHARING = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -966,7 +971,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_MODULES_DISABLE_PRIVATE_WARNING = YES;
 				CODE_SIGN_ENTITLEMENTS = "";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				DEAD_CODE_STRIPPING = YES;
@@ -976,7 +981,6 @@
 				EXCLUDED_ARCHS = "";
 				GCC_INCREASE_PRECOMPILED_HEADER_SHARING = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1004,7 +1008,6 @@
 				GCC_INCREASE_PRECOMPILED_HEADER_SHARING = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INFOPLIST_FILE = loader/Info.plist;
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_SWIFT_FLAGS = "-D ROOTLESS";
 				PRODUCT_BUNDLE_IDENTIFIER = loader;
@@ -1037,7 +1040,6 @@
 				GCC_INCREASE_PRECOMPILED_HEADER_SHARING = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INFOPLIST_FILE = loader/Info.plist;
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_SWIFT_FLAGS = "-D ROOTLESS";
 				PRODUCT_BUNDLE_IDENTIFIER = loader;
@@ -1067,7 +1069,6 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				EXECUTABLE_PREFIX = lib;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				RUN_CLANG_STATIC_ANALYZER = YES;
@@ -1094,7 +1095,6 @@
 				DYLIB_CURRENT_VERSION = 1;
 				EXECUTABLE_PREFIX = lib;
 				GCC_OPTIMIZATION_LEVEL = s;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				RUN_CLANG_STATIC_ANALYZER = YES;
@@ -1129,7 +1129,6 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_NAME = pspawn;
@@ -1167,7 +1166,6 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_NAME = pspawn;
@@ -1232,9 +1230,9 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)";
-				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/roothide";
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1289,9 +1287,9 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)";
-				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/roothide";
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -1323,7 +1321,6 @@
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = fast;
 				KEEP_PRIVATE_EXTERNS = NO;
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1358,7 +1355,6 @@
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = fast;
 				KEEP_PRIVATE_EXTERNS = NO;
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1379,7 +1375,6 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = VF46MYDSGH;
 				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -1394,7 +1389,6 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = VF46MYDSGH;
 				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -1413,7 +1407,6 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				EXECUTABLE_PREFIX = lib;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -1434,7 +1427,6 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				EXECUTABLE_PREFIX = lib;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;

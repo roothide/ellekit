@@ -82,14 +82,21 @@ int tweaks_count=0;
 
 static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
     
-    CFStringRef plistPath;
-    CFURLRef url;
-    CFDataRef data;
-    CFPropertyListRef plist;
+    CFStringRef plistPath=NULL;
+    CFURLRef url=NULL;
+    CFDataRef data=NULL;
+    CFPropertyListRef plist=NULL;
     
     char* path = append_str(orig_path, ".plist");
+    if (!path) {
+        return false;
+    }
         
     plistPath = CFStringCreateWithCString(kCFAllocatorDefault, path, kCFStringEncodingUTF8);
+    if (!plistPath) {
+        free(path);
+        return false;
+    }
 
     if (access(path, F_OK) != 0) {
         free(path);
@@ -117,19 +124,47 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
     CFRelease(url);
     CFRelease(plistPath);
                             
+    if(!plist) {
+        //invalid plist file
+        return false;
+    }
+
+    if (CFGetTypeID(plist) != CFDictionaryGetTypeID()) {
+        CFRelease(plist);
+        return false;
+    }
+
     CFDictionaryRef filter = CFDictionaryGetValue(plist, CFSTR("Filter"));
     
+    if (!filter || CFGetTypeID(filter) != CFDictionaryGetTypeID()) {
+        CFRelease(plist);
+        return false;
+    }
+
     CFBooleanRef tweakManager = CFDictionaryGetValue(plist, CFSTR("IsTweakManager"));
     
+    if (tweakManager != NULL && CFGetTypeID(tweakManager) != CFBooleanGetTypeID()) {
+        CFRelease(plist);
+        return false;
+    }
+
     if (tweakManager != NULL) {
         *isTweakManager = CFBooleanGetValue(tweakManager);
     }
 
     CFArrayRef versions = CFDictionaryGetValue(filter, CFSTR("CoreFoundationVersion"));
+    if (versions && CFGetTypeID(versions) != CFArrayGetTypeID()) {
+        CFRelease(plist);
+        return false;
+    }
     if (versions) {
 
         if (CFArrayGetCount(versions) == 1) {
             CFTypeRef value = CFArrayGetValueAtIndex(versions, 0);
+            if (CFGetTypeID(value) != CFNumberGetTypeID()) {
+                CFRelease(plist);
+                return false;
+            }
             if (CFGetTypeID(value) == CFNumberGetTypeID()) {
                 double version;
                 CFNumberGetValue((CFNumberRef)value, kCFNumberDoubleType, &version);
@@ -142,8 +177,8 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
         
         if (CFArrayGetCount(versions) == 2) {
             CFTypeRef value1 = CFArrayGetValueAtIndex(versions, 0);
-            CFTypeRef value2 = CFArrayGetValueAtIndex(versions, 0);
-            if (CFGetTypeID(value1) == CFNumberGetTypeID() || CFGetTypeID(value2) == CFNumberGetTypeID()) {
+            CFTypeRef value2 = CFArrayGetValueAtIndex(versions, 1);
+            if (CFGetTypeID(value1) == CFNumberGetTypeID() && CFGetTypeID(value2) == CFNumberGetTypeID()) {
                 double version1;
                 double version2;
                 CFNumberGetValue((CFNumberRef)value1, kCFNumberDoubleType, &version1);
@@ -158,15 +193,25 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
 
     CFArrayRef bundles = CFDictionaryGetValue(filter, CFSTR("Bundles"));
     
+    if (bundles && CFGetTypeID(bundles) != CFArrayGetTypeID()) {
+        CFRelease(plist);
+        return false;
+    }
+
     if (bundles) {
         for (CFIndex i = 0; i < CFArrayGetCount(bundles); i++) {
             CFStringRef id = CFArrayGetValueAtIndex(bundles, i);
+            if (id && CFGetTypeID(id) != CFStringGetTypeID()) {
+                CFRelease(plist);
+                return false;
+            }
+
             if (id) {
                 
                 if(!g_isUIProcess) {
                     const char* bid = CFStringGetCStringPtr(id, kCFStringEncodingUTF8);
                     if(!bid) continue;
-                    
+                    //restrict UIKit* tweaks from loading into the background daemon process to improve stability and performance.
                     if(strncmp(bid, "com.apple.UIKit", sizeof("com.apple.UIKit")-1)==0 // and com.apple.UIKitCore
                        || strncmp(bid, "com.apple.TextInput", sizeof("com.apple.TextInput")-1)==0 // and com.apple.TextInputUI
                        || strncmp(bid, "com.apple.TextEntry", sizeof("com.apple.TextEntry")-1)==0
@@ -196,9 +241,18 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
     
     CFArrayRef classes = CFDictionaryGetValue(filter, CFSTR("Classes"));
     
+    if (classes && CFGetTypeID(classes) != CFArrayGetTypeID()) {
+        CFRelease(plist);
+        return false;
+    }
+
     if (classes) {
         for (CFIndex i = 0; i < CFArrayGetCount(classes); i++) {
             CFStringRef id = CFArrayGetValueAtIndex(classes, i);
+            if (!id || CFGetTypeID(id) != CFStringGetTypeID()) {
+                CFRelease(plist);
+                return false;
+            }
             const char* str = CFStringGetCStringPtr(id, kCFStringEncodingASCII);
             if (str) {
                 if (objc_getClass(str)) {
@@ -207,7 +261,13 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
             }
             else {
                 char* copiedStr = malloc(CFStringGetLength(id)+1);
-                CFStringGetCString(id, copiedStr, CFStringGetLength(id)+1, kCFStringEncodingASCII);
+                if (!copiedStr) {
+                    continue;
+                }
+                if (!CFStringGetCString(id, copiedStr, CFStringGetLength(id)+1, kCFStringEncodingASCII)) {
+                    free(copiedStr);
+                    continue;
+                }
                 if (objc_getClass(copiedStr)) {
                     free(copiedStr);
                     goto success;
@@ -218,6 +278,10 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
     }
     
     CFArrayRef executables = CFDictionaryGetValue(filter, CFSTR("Executables"));
+    if (executables && CFGetTypeID(executables) != CFArrayGetTypeID()) {
+        CFRelease(plist);
+        return false;
+    }
 
     if (executables) {
         
@@ -225,9 +289,17 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
         uint32_t size = 1024;
 
         if (_NSGetExecutablePath(executable, &size) == 0) {
+            if (!get_last_path_component(executable)) {
+                CFRelease(plist);
+                return false;
+            }
             
             for (CFIndex i = 0; i < CFArrayGetCount(executables); i++) {
                 CFStringRef id = CFArrayGetValueAtIndex(executables, i);
+                if (!id || CFGetTypeID(id) != CFStringGetTypeID()) {
+                    CFRelease(plist);
+                    return false;
+                }
                 const char* str = CFStringGetCStringPtr(id, kCFStringEncodingASCII);
                 if (str) {
                     if (!strcmp(str, get_last_path_component(executable))) {
@@ -236,7 +308,13 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
                 }
                 else {
                     char* copiedStr = malloc(CFStringGetLength(id)+1);
-                    CFStringGetCString(id, copiedStr, CFStringGetLength(id)+1, kCFStringEncodingASCII);
+                    if (!copiedStr) {
+                        continue;
+                    }
+                    if (!CFStringGetCString(id, copiedStr, CFStringGetLength(id)+1, kCFStringEncodingASCII)) {
+                        free(copiedStr);
+                        continue;
+                    }
                     if (!strcmp(copiedStr, get_last_path_component(executable))) {
                         free(copiedStr);
                         goto success;
@@ -252,6 +330,12 @@ static bool tweak_needinject(const char* orig_path, bool* isTweakManager) {
                 if (file_name) {
                     for (CFIndex i = 0; i < CFArrayGetCount(executables); i++) {
                         CFStringRef id = CFArrayGetValueAtIndex(executables, i);
+                        if (!id || CFGetTypeID(id) != CFStringGetTypeID()) {
+                            CFRelease(file_name);
+                            CFRelease(url);
+                            CFRelease(plist);
+                            return false;
+                        }
                         if (CFStringCompare(file_name, id, kCFCompareCaseInsensitive) == kCFCompareEqualTo) {
                             CFRelease(file_name);
                             CFRelease(url);

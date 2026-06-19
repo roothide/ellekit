@@ -8,25 +8,59 @@ import Foundation
 import ellekitc
 #endif
 
-public func patchFunction(_ function: UnsafeMutableRawPointer, @InstructionBuilder _ instructions: () -> [UInt8]) {
+private var hookMutex: pthread_mutex_t = {
+    var attr = pthread_mutexattr_t()
+    pthread_mutexattr_init(&attr)
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE)
 
-    let code = instructions()
+    var mutex = pthread_mutex_t()
+    pthread_mutex_init(&mutex, &attr)
+    pthread_mutexattr_destroy(&attr)
+    return mutex
+}()
 
-    let size = mach_vm_size_t(MemoryLayout.size(ofValue: code) * code.count) / 8
+private func debugInstructions(at pointer: UnsafeMutableRawPointer, count: Int) -> String {
+    guard count > 0 else { return "[]" }
 
-    code.withUnsafeBufferPointer { buf in
-        let result = rawHook(address: function.makeReadable(), code: buf.baseAddress, size: size)
-        #if DEBUG
-        print(result)
-        #else
-        _ = result
-        #endif
+    let words = pointer.withMemoryRebound(to: UInt32.self, capacity: count) { ptr in
+        (0..<count).map { idx in
+            String(format: "0x%08x", ptr[idx])
+        }
     }
+
+    return "[" + words.joined(separator: ", ") + "]"
+}
+
+private func debugBytes(_ pointer: UnsafePointer<UInt8>?, count: Int, limit: Int = 64) -> String {
+    guard let pointer, count > 0 else { return "nil" }
+
+    let byteCount = min(count, limit)
+    let bytes = (0..<byteCount).map { idx in
+        String(format: "%02x", pointer[idx])
+    }.joined(separator: " ")
+
+    if count > limit {
+        return "\(bytes) ... (\(count) bytes)"
+    }
+
+    return "\(bytes) (\(count) bytes)"
+}
+
+private func debugMachError(_ kr: kern_return_t) -> String {
+    guard let message = mach_error_string(kr) else {
+        return "unknown"
+    }
+    return String(cString: message)
 }
 
 @_cdecl("EKHookFunction")
-public func hook(_ stockTarget: UnsafeMutableRawPointer, _ stockReplacement: UnsafeMutableRawPointer, _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>?, _ internalSkipChecks: Bool = false) -> UnsafeMutableRawPointer? {
-    
+public func hook(_ stockTarget: UnsafeMutableRawPointer, _ stockReplacement: UnsafeMutableRawPointer, _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>? = nil)
+{
+    pthread_mutex_lock(&hookMutex)
+    defer {
+        pthread_mutex_unlock(&hookMutex)
+    }
+
     /*
     guard isDebugged() else {
         var orig: UnsafeMutableRawPointer? = nil
@@ -35,129 +69,153 @@ public func hook(_ stockTarget: UnsafeMutableRawPointer, _ stockReplacement: Uns
     }
      */
     
-    var target = stockTarget.makeReadable()
+    let target = stockTarget.makeReadable()
     let replacement = stockReplacement.makeReadable()
+    print("[*] ellekit: hook request stockTarget=\(stockTarget) target=\(target) stockReplacement=\(stockReplacement) replacement=\(replacement) resultRequested=\(result != nil)")
     
-    if let newReplacement = hooks[target], !internalSkipChecks {
-        return hook(newReplacement.makeReadable(), replacement, result)
+#if DEBUG
+    var info = Dl_info()
+    dladdr(target, &info)
+    if let name = info.dli_sname, let frame = info.dli_fname {
+        print("[*] ellekit: hooking \(String(describing: target))/\(String(cString: name)) in \(String(cString: frame)) -> \(String(describing: replacement))/\(info.dli_sname == nil ? "" : String(cString: info.dli_sname))")
     }
+#endif
     
-//    var info = Dl_info()
-//    dladdr(target, &info)
-//    var info2 = Dl_info()
-//    dladdr(target, &info2)
-//    if let name = info.dli_sname, let frame = info.dli_fname {
-//        NSLog("[hookinfo] \(String(describing: target))/\(String(cString: name)) in \(String(cString: frame)) -> \(String(describing: replacement))/\(info.dli_sname == nil ? "" : String(cString: info.dli_sname))")
-//    }
-    
-    print("finding size", target)
-    
-    let targetSize = findFunctionSize(target) ?? 6
-    let safeReg = findSafeRegister(target)
-
-    print("[*] ellekit: Size of target:", targetSize as Any)
-
-    let branchOffset = (Int(UInt(bitPattern: replacement)) - Int(UInt(bitPattern: target))) //: / 4
-
-    hooks[target] = replacement
-
-    var code = [UInt8]()
-
-    var branchAfter: Bool = false
-    var patchSize: Int = -1
-    
-    if targetSize >= 3 && abs(branchOffset / 1024 / 1024 / 1024) < 4 {
-         print("[*] adrp branch")
-
-        let target_addr = UInt64(UInt(bitPattern: target))
-        let replacement_addr = UInt64(UInt(bitPattern: replacement))
-        
-        code = assembleJump(replacement_addr, pc: target_addr, link: false, page: true, jmpReg: Register.x(safeReg))
-        
-        if targetSize != 3 {
-            branchAfter = true
+    let existingReplacement: UnsafeMutableRawPointer? = withHooksLock { hooks in
+        let existing = hooks[target]
+        if existing == nil {
+            hooks[target] = replacement
         }
-        
-        patchSize = 3
-        
-     } else if targetSize >= 4 && abs(branchOffset / 1024 / 1024) > 128 {
-         print("[*] Big branch")
-         
-        let target_addr = UInt64(UInt(bitPattern: replacement))
-        
-        code = [0x50, 0x00, 0x00, 0x58] + // ldr x16, #8
-                br(.x16).bytes() +
-                split(from: target_addr)
-         
-         if targetSize != 4 {
-             branchAfter = true
-         }
-         
-         patchSize = 4
-         
-     } else if !internalSkipChecks, let tramp = Trampoline(
-        base: target,
-        target: replacement
-     ) {
-         print("[+] ellekit: using trampoline method")
-         
-         return tramp.orig
-     } else if abs(branchOffset / 1024 / 1024) > 128 { // tiny function beyond 4gb hook... using exception handler
-         
-         //abort();
-         //return nil
-         
-         if exceptionHandler == nil {
-              exceptionHandler = .init()
-         }
-         print("[*] ellekit: using exception handler method")
-         code = [0x20, 0x00, 0x20, 0xD4] // brk #1
-         
-         patchSize = 1
-    } else { // fastest and simplest branch
+        return existing
+    }
+
+    if let existingReplacement {
+        print("[*] ellekit: chaining existing hook target=\(target) existingReplacement=\(existingReplacement) newReplacement=\(replacement) resultRequested=\(result != nil)")
+        return hook(existingReplacement.makeReadable(), replacement, result)
+    }
+
+    var patchSize: Int = -1
+    var patchCode = [UInt8]()
+
+    var nearbyTramp: NearbyTrampoline? = nil
+
+    let branchOffset = Int(UInt(bitPattern: replacement)) - Int(UInt(bitPattern: target))
+    let adrpPageOffset = (Int(UInt(bitPattern: replacement)) & ~0xFFF) - (Int(UInt(bitPattern: target)) & ~0xFFF)
+    
+    let targetSize = getSafeRebindSize(target, desiredSize: 4)
+    
+    let directBranchReachable = branchOffset >= -0x800_0000 && branchOffset <= 0x7FF_FFFC
+    print("[*] ellekit: branch analysis target=\(target) targetSize=\(targetSize) replacement=\(replacement) branchOffset=\(branchOffset) directBranchReachable=\(directBranchReachable) adrpPageOffset=\(adrpPageOffset)")
+
+    if !directBranchReachable {
+        print("[*] ellekit: direct branch out of range; trying nearby stub target=\(target) replacement=\(replacement)")
+        if let stub = NearbyTrampoline(base: target, target: replacement, maxPatchSize: targetSize) {
+            patchCode = stub.patchCode
+            patchSize = stub.patchSize
+            nearbyTramp = stub
+        } else {
+            print("[-] ellekit: no nearby stub page usable target=\(target) replacement=\(replacement) targetSize=\(targetSize)")
+        }
+    }
+
+    if patchSize > 0 {
+        // nearby stub already selected above
+    } else if directBranchReachable && targetSize >= 1 { // fastest and simplest branch
         print("[*] ellekit: Small branch")
         @InstructionBuilder
         var codeBuilder: [UInt8] {
             b(branchOffset)
         }
-        code = codeBuilder
-        
+        patchCode = codeBuilder
         patchSize = 1
-    }
 
-    let size = mach_vm_size_t(MemoryLayout.size(ofValue: code) * code.count) / 8
+    } else if targetSize >= 3 && adrpPageOffset >= -0x1_0000_0000 && adrpPageOffset <= 0xFFFF_F000 {
+        print("[*] adrp branch")
 
-    let orig = getOriginal(
-        target,
-        targetSize,
-        desiredRebindSize: patchSize * 4,
-        shouldBranchAfter: branchAfter,
-        jmpReg: Register.x(safeReg)
-    )
-    
-    let orig2 = orig.0?.makeCallable()
-    
-    if result != nil {
-        result?.pointee = orig2
-    }
-    
-    let ret = code.withUnsafeBufferPointer { buf in
-        let result = rawHook(address: target, code: buf.baseAddress, size: size)
-        #if DEBUG
-        assert(result == 0, "ellekit: Hook failure for \(String(describing: target)) to \(String(describing: target))")
-        #else
-        if result != 0 {
-            print("ellekit: Hook failure for \(String(describing: target)) to \(String(describing: target))")
+        let replacementLow16 = Int(UInt(bitPattern: replacement)) & 0xFFFF
+        @InstructionBuilder
+        var codeBuilder: [UInt8] {
+            adrp(.x16, adrpPageOffset)
+            movk(.x16, replacementLow16)
+            br(.x16)
         }
-        #endif
-        return result
+        patchCode = codeBuilder
+        patchSize = 3
+
+    } else if targetSize >= 4 {
+        print("[*] Big branch")
+
+        let target_addr = UInt64(UInt(bitPattern: replacement))
+
+        patchCode = [0x50, 0x00, 0x00, 0x58] + // ldr x16, #8
+                    br(.x16).bytes() +
+                    split(from: target_addr)
+
+        patchSize = 4
+
+    } else if targetSize >= 1, let tramp = Trampoline(base: target, target: replacement) {
+        print("[+] ellekit: using trampoline method target=\(target) replacement=\(replacement) trampoline=\(tramp.trampoline) targetSize=\(targetSize)")
+
+        let trampOffset = Int(UInt(bitPattern: tramp.trampoline)) - Int(UInt(bitPattern: target))
+        @InstructionBuilder
+        var codeBuilder: [UInt8] {
+            b(trampOffset)
+        }
+        patchCode = codeBuilder
+        patchSize = 1
+
+    } else { // tiny function beyond b range... using exception handler
+
+        print("ellekit: no hook strategy available target=\(target) replacement=\(replacement) targetSize=\(targetSize) branchOffset=\(branchOffset) adrpPageOffset=\(adrpPageOffset) directBranchReachable=\(directBranchReachable)")
+
+        abort(); //should never happen
+
+//        if exceptionHandler == nil {
+//            exceptionHandler = .init()
+//        }
+//        print("[*] ellekit: using exception handler method")
+//        patchCode = [0x20, 0x00, 0x20, 0xD4] // brk #1
+//
+//        patchSize = 1
+    }
+
+    assert(patchCode.count == (patchSize*4))
+    guard targetSize > 0 && targetSize >= patchSize else {
+        print("ellekit: selected patch has no matching safe size target=\(target) replacement=\(replacement) patchSize=\(patchSize) targetSize=\(targetSize)")
+        abort()
+    }
+
+    print("[*] ellekit: selected patch target=\(target) replacement=\(replacement) targetSize=\(targetSize) patchSize=\(patchSize) patchCodeBytes=\(patchCode.count) resultRequested=\(result != nil)")
+
+    if let result = result {
+        // Intentional force unwrap: requesting `result` means the caller requires an
+        // orig function. If orig generation fails, trapping here is the designed behavior.
+        
+        let (origFunc, origSize) = getOriginal(target, targetSize, codePlacement: nearbyTramp?.freeSpace) ?? (nil, 0)
+        
+        print("[*] ellekit: getOriginal result target=\(target) targetSize=\(targetSize) origFunc=\(String(describing: origFunc)) origSize=\(origSize)")
+
+        guard let orig = origFunc else {
+            print("[-] ellekit: fatal orig is nil target=\(target) replacement=\(replacement) resultStorage=\(result) targetSize=\(targetSize) patchSize=\(patchSize) patchCodeBytes=\(patchCode.count) firstInstructions=\(debugInstructions(at: target, count: 8))")
+            
+            abort()
+        }
+        
+        result.pointee = orig.makeCallable()
+    }
+    
+    nearbyTramp?.finalize()
+    
+    let codesize = mach_vm_size_t(MemoryLayout<UInt8>.stride * patchCode.count)
+
+    let ret = patchCode.withUnsafeBufferPointer { buf in
+        return rawHook(address: target, code: buf.baseAddress, size: codesize)
     }
     
     if ret != 0 {
-        return nil
+        print("ellekit: rawHook failed(\(ret)) target=\(target) replacement=\(replacement) patchSize=\(patchSize) codeSize=\(codesize)")
+        abort() //should never happen
     }
-
-    return orig2
 }
 
 func split(from uint64: UInt64) -> [UInt8] {
@@ -176,14 +234,10 @@ func rawHook(address: UnsafeMutableRawPointer, code: UnsafePointer<UInt8>?, size
     
     //NSLog("[hookinfo] patching \(String(describing: address)) with \(code == nil ? "nothing!" : Array(UnsafeBufferPointer(start: code, count: Int(size))).map {String(format: "%02X", $0)}.joined())")
 
-    let enforceThreadSafety = enforceThreadSafety
-    if enforceThreadSafety {
-        stopAllThreads()
-    }
+    let threads = stopAllThreads()
+    print("[*] ellekit: rawHook start address=\(address) size=\(size) code=\(debugBytes(code, count: Int(size))) stoppedThreads=\(threads.count)")
     defer {
-        if enforceThreadSafety {
-            resumeAllThreads()
-        }
+        resumeAllThreads(threads)
     }
     
     let goodSize = Int(size)
@@ -198,6 +252,7 @@ func rawHook(address: UnsafeMutableRawPointer, code: UnsafePointer<UInt8>?, size
     )
         
     guard krt1 == KERN_SUCCESS else {
+        print("[-] ellekit: rawHook failed to set RW protection err=\(krt1) message=\(debugMachError(krt1)) address=\(address) size=\(size)")
         return Int(krt1)
     }
 
@@ -208,15 +263,16 @@ func rawHook(address: UnsafeMutableRawPointer, code: UnsafePointer<UInt8>?, size
         machAddr,
         size,
         0,
-        VM_PROT_READ | VM_PROT_EXECUTE 
+        VM_PROT_READ | VM_PROT_EXECUTE
     )
 
-    // flush page cache so we don't hit cached unpatched functions
-    sys_icache_invalidate(address, Int(vm_page_size))
-
     guard err2 == KERN_SUCCESS else {
-       return Int(err2)
+        print("ellekit: failed to restore RX protection err=\(err2) message=\(debugMachError(err2)) address=\(address) size=\(size)")
+        abort()
     }
+
+    // flush page cache so we don't hit cached unpatched functions
+    sys_icache_invalidate(address, Int(size))
                
     return 0
 }

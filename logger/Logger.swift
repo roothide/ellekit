@@ -7,12 +7,14 @@
 import Foundation
 import os.log
 
+private let ENABLE_SYSLOGGER: Bool = false
 private let ENABLE_LINE_LOGGING: Bool = true
-private let ENABLE_FILE_EXTENSION_LOGGING: Bool = false
+private let ENABLE_FILE_EXTENSION_LOGGING: Bool = true
 
 @available(iOS 14.0, tvOS 14.0, watchOS 8.0, macOS 11.0, *)
-public let logger = Logger(subsystem: "red.charlotte.ellekit", category: "all")
+public let syslogger = { ENABLE_SYSLOGGER ? Logger(subsystem: "red.charlotte.ellekit", category: "all") : nil }()
 
+@inline(__always)
 public func dprint(
     _ items: Any..., // first variadic parameter
     file: String = #fileID, // file name which is not meant to be specified
@@ -20,16 +22,19 @@ public func dprint(
     line: Int = #line, // line number
     separator: String = " "
 ) {
+#if DEBUG
     let file = ENABLE_FILE_EXTENSION_LOGGING ?
         file.components(separatedBy: "/").last ?? "ElleKit" :
         file.components(separatedBy: "/").last?.components(separatedBy: ".").first ?? "ElleKit"
     let line = ENABLE_LINE_LOGGING ? ":\(String(line))" : ""
     log(items: items, file: file, line: line, separator: separator)
+#endif
 }
 
-struct TextLog: TextOutputStream {
+#if DEBUG
+struct FileLog: TextOutputStream {
 
-    static var shared = TextLog()
+    static var shared = FileLog()
     
     private var enableLogging: Bool {
         #if !os(macOS)
@@ -41,7 +46,7 @@ struct TextLog: TextOutputStream {
     
     func write(_ string: String) {
         #if os(iOS)
-        let log = NSURL.fileURL(withPath: ("/var/jb/var/mobile/log.txt" as NSString).resolvingSymlinksInPath)
+        let log = NSURL.fileURL(withPath: ("/var/mobile/log.txt" as NSString).resolvingSymlinksInPath)
         #else
         let log = NSURL.fileURL(withPath: "/Users/charlotte/log.txt")
         #endif
@@ -54,7 +59,9 @@ struct TextLog: TextOutputStream {
         }
     }
 }
+#endif
 
+@inline(__always)
 public func tprint(
     _ items: Any..., // first variadic parameter
     file: String = #fileID, // file name which is not meant to be specified
@@ -62,6 +69,7 @@ public func tprint(
     line: Int = #line, // line number
     separator: String = " "
 ) {
+#if DEBUG
     let file = ENABLE_FILE_EXTENSION_LOGGING ?
         file.components(separatedBy: "/").last ?? "ElleKit" :
         file.components(separatedBy: "/").last?.components(separatedBy: ".").first ?? "ElleKit"
@@ -77,49 +85,46 @@ public func tprint(
         }
         out.append(separator)
     }
-    TextLog.shared.write("[\(file)\(line)] \(out)")
+    FileLog.shared.write("[\(file)\(line)] \(out)")
+#endif
 }
 
-// this is meant to override the print function globally in scope
-// the normal signature of the print function is print(_ items: Any...)
-// if we wanna override it, we can't use a single variadic parameter because
-// there is an error about ambiguous usage
-// tldr: very cursed code, do not touch
+@available(*, deprecated, message: "Multi-argument print is disabled. Use print(\"...\") with a single interpolated string.")
 public func print(
-    _ items: Any..., // first variadic parameter
-    file: String = #fileID, // file name which is not meant to be specified
-    _ items2: Any..., // second variadic parameter
-    line: Int = #line, // line number
-    separator: String = " "
+    _ first: Any,
+    _ second: Any,
+    _ rest: Any...,
+    separator: String = " ",
+    terminator: String = "\n"
 ) {
-    let file = ENABLE_FILE_EXTENSION_LOGGING ?
-        file.components(separatedBy: "/").last ?? "ElleKit" :
-        file.components(separatedBy: "/").last?.components(separatedBy: ".").first ?? "ElleKit"
-    let line = ENABLE_LINE_LOGGING ? ":\(String(line))" : ""
-    log(items: items, file: file, line: line, separator: separator)
 }
 
 // this function exists to override the print function
 // when there is only one item to print
 // since the other function uses two variadic parameters it doesn't work
 // when there is one element
+@inline(__always)
 public func print(
-    _ item: Any,
+    _ item: @autoclosure () -> Any,
     file: String = #fileID,
     line: Int = #line
 ) {
+#if DEBUG
     let file = ENABLE_FILE_EXTENSION_LOGGING ?
         file.components(separatedBy: "/").last ?? "ElleKit" :
         file.components(separatedBy: "/").last?.components(separatedBy: ".").first ?? "ElleKit"
     let line = ENABLE_LINE_LOGGING ? ":\(String(line))" : ""
-    log(items: [item], file: file, line: line)
+    log(items: [item()], file: file, line: line)
+#endif
 }
 
 var islogd: Bool = {
     ProcessInfo.processInfo.processName.contains("logd")
 }()
 
+@inline(__always)
 private func log<T>(items: [T], file: String, line: String? = nil, separator: String = " ") {
+#if DEBUG
     var out = String()
     for item in items {
         if type(of: item) is AnyClass {
@@ -131,11 +136,13 @@ private func log<T>(items: [T], file: String, line: String? = nil, separator: St
         }
         out.append(separator)
     }
-    #if DEBUG
+    if getenv("ELLEKITLOG") != nil {
+        fputs("[\(file)\(line ?? "")] \(out)\n", stderr)
+    }
     if #available(iOS 14.0, tvOS 14.0, watchOS 8.0, macOS 11.0, *) {
-        if !islogd {
-            logger.log("[\(file)\(line ?? "")] \(out)")
+        if ENABLE_SYSLOGGER && !islogd {
+            syslogger?.log("[\(file)\(line ?? "")] \(out)")
         }
     }
-    #endif
+#endif
 }

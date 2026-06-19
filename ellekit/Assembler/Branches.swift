@@ -4,19 +4,22 @@
 
 public func disassembleBranchImm(_ opcode: UInt64) -> Int {
     var imm = (opcode & 0x3FFFFFF) << 2
-    if (opcode & 0x2000000) == 1 {
+    if (opcode & 0x2000000) != 0 {
         // Sign extend
-        imm |= 0xFC000000
+        imm |= 0xFFFFFFFFF0000000
     }
-    return Int(imm)
+    return Int(Int64(bitPattern: imm))
 }
 
-func redirectBranch(_ target: UnsafeMutableRawPointer, _ isn: UInt64, _ ptr: UnsafeMutableRawPointer) -> [UInt8] {
+func redirectBranch(_ target: UnsafeMutableRawPointer, _ isn: UInt64, _ ptr: UnsafeMutableRawPointer, jmpReg: Register) -> [UInt8] {
     let pcRel = disassembleBranchImm(reverse(isn))
 
-    let originalTarget = UInt64(UInt(bitPattern: target)) + UInt64(pcRel)
+    var originalTarget = UInt64(bitPattern: Int64(Int(UInt(bitPattern: target))) + Int64(pcRel)) // pcRel is Int
+    if originalTarget == UInt64(UInt(bitPattern: target)) {
+        originalTarget = UInt64(UInt(bitPattern: ptr))
+    }
 
-    let code = assembleJump(originalTarget, pc: UInt64(UInt(bitPattern: target)), link: false, big: true)
+    let code = assembleJump(originalTarget, pc: UInt64(UInt(bitPattern: target)), link: false, big: true, jmpReg: jmpReg)
 
     return code
 }
@@ -69,7 +72,7 @@ public class bl: Instruction {
 
     public init(_ addr: Int) {
         var base = Self.base
-        base |= addr/4
+        base |= ((addr/4) & 0x3ffffff)
         self.value = reverse(base)
     }
 
@@ -130,7 +133,7 @@ public class cbz: Instruction {
     public init(_ register: Register, _ addr: Int) {
         var base = Self.base
         base |= (register.w ? 0 : 1) << 31
-        base |= ((addr/4) << 5)
+        base |= (((addr/4) & 0x7ffff) << 5)
         base |= register.value
         self.value = reverse(base)
     }
@@ -152,7 +155,7 @@ public class cbnz: Instruction {
     public init(_ register: Register, _ addr: Int) {
         var base = Self.base
         base |= (register.w ? 0 : 1) << 31
-        base |= ((addr/4) << 5)
+        base |= (((addr/4) & 0x7ffff) << 5)
         base |= register.value
         self.value = reverse(base)
     }
@@ -167,17 +170,17 @@ public class cbnz: Instruction {
 }
 
 #if DEBUG
-public func _assembleJump(_ target: UInt64, pc: UInt64, size: Int = 5, link: Bool, big: Bool = false, page: Bool = false, jmpReg: Register = .x16) -> [UInt8] {
+public func _assembleJump(_ target: UInt64, pc: UInt64, size: Int = 5, link: Bool, big: Bool = false, page: Bool = false, jmpReg: Register) -> [UInt8] {
     assembleJump(target, pc: pc, size: size, link: link, big: big, page: page, jmpReg: jmpReg)
 }
 #endif
-func assembleJump(_ target: UInt64, pc: UInt64, size: Int = 5, link: Bool, big: Bool = false, page: Bool = false, jmpReg: Register = .x16) -> [UInt8] {
+func assembleJump(_ target: UInt64, pc: UInt64, size: Int = 5, link: Bool, big: Bool = false, page: Bool = false, jmpReg: Register) -> [UInt8] {
     let target = Int(target)
     let pc = Int(pc)
     let offset = target - pc
     if page {
         
-        let pageOffset = Int((target & ~0x3fff) - (pc & ~0x3fff))
+        let pageOffset = Int((target & ~0xFFF) - (pc & ~0xFFF))
                 
         let movkImm = target - (target & ~0xffff)
         
@@ -187,7 +190,7 @@ func assembleJump(_ target: UInt64, pc: UInt64, size: Int = 5, link: Bool, big: 
             link ? blr(jmpReg).bytes() : br(jmpReg).bytes()
         ]
         return codeBuild.joined().literal()
-    } else if (size > 5 && abs(offset / 1024 / 1024) > 128) || big {
+    } else if (size > 5 && (offset < -0x800_0000 || offset > 0x7FF_FFFC)) || big {
         let codeBuild = [
             movk(jmpReg, target % 65536).bytes(),
             movk(jmpReg, (target / 65536) % 65536, lsl: 16).bytes(),
