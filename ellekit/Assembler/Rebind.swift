@@ -148,12 +148,8 @@ private func parseRebindOperation(
     }
 
     if reversed & 0x9F000000 == 0x90000000 { // adrp
-        guard let target = adrp.destination(reversed, originalPC) else {
-            print("ellekit: failed to calculate adrp destination instruction=0x\(String(reversed, radix: 16)) originalPC=0x\(String(originalPC, radix: 16))")
-            abort()
-        }
-
         let register = Int(reversed.bits(0...4))
+        let target = adrp.destination(reversed, originalPC)
         return .adrp(target: target, register: register)
     }
 

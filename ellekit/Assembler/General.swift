@@ -345,7 +345,7 @@ class adrp: Instruction {
 
     static let base = 0b1_00_10000_0000000000000000000_00000
 
-    static func destination(_ instruction: UInt32, _ pc: UInt64) -> UInt64? {
+    static func destination(_ instruction: UInt32, _ pc: UInt64) -> UInt64 {
         // Calculate imm from hi and lo
         var imm_hi_lo = UInt64((instruction >> 3)  & 0x1FFFFC)
         imm_hi_lo    |= UInt64((instruction >> 29) & 0x3)

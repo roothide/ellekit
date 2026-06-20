@@ -6,3 +6,4 @@ launchd-hook/fishhook/*
 ellekit.xcodeproj/xcuserdata
 ellekit.xcodeproj/project.xcworkspace/xcuserdata
 packages/
+/work-*/

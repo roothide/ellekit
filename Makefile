@@ -106,7 +106,7 @@ deb-ios-rootful deb-ios-rootless deb-ios-roothide: build-ios
 	@mkdir -p packages
 	dpkg-deb --root-owner-group -b $(STAGE_DIR) packages/ellekit_$(DEB_VERSION)_$(ARCHITECTURE).deb
 	
-	@rm -rf work-$(ARCHITECTURE)
+# 	@rm -rf work-$(ARCHITECTURE)
 
 deb-ios: deb-ios-rootful deb-ios-rootless deb-ios-roothide
 
