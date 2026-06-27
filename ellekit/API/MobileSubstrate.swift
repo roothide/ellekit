@@ -49,6 +49,7 @@ public func MSFindSymbol(_ image: UnsafeRawPointer?, _ name: UnsafeRawPointer?) 
         }
         #endif
     } else {
+        fputs("[-] ellekit: image=null, global search (slow) for symbol: \(String(cString: name.assumingMemoryBound(to: CChar.self)))\n", stderr)
         for img in 0..<_dyld_image_count() {
             if let hdr = _dyld_get_image_header(img) {
                 if let result = MSFindSymbol(hdr, name) {

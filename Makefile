@@ -1,6 +1,6 @@
 .PHONY: all deb-ios-rootless deb-ios-rootful
 
-VERSION = 1.1.3-4~beta1
+VERSION = 1.1.3-4~beta2
 
 COMMON_OPTIONS = BUILD_DIR="build/" CODE_SIGNING_ALLOWED="NO" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_IDENTITY="" -configuration $(CONFIGURATION)
 

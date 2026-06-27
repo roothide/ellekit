@@ -88,6 +88,7 @@ struct NearbyTrampoline
     /// Complete stub installation: RW → RX, `sys_icache_invalidate`.
     /// Must run after all stub writes and before `base` is patched to branch here.
     func finalize() {
+        // This might fail if developer mode is not enabled.
         let kr = custom_mach_vm_protect(
             mach_task_self_,
             mach_vm_address_t(UInt(bitPattern: trampolinePage)),

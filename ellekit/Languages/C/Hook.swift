@@ -258,6 +258,7 @@ func rawHook(address: UnsafeMutableRawPointer, code: UnsafePointer<UInt8>?, size
 
     manual_memcpy(address, code, goodSize)
         
+    // This might fail if developer mode is not enabled.
     let err2 = custom_mach_vm_protect(
         mach_task_self_,
         machAddr,
@@ -267,6 +268,7 @@ func rawHook(address: UnsafeMutableRawPointer, code: UnsafePointer<UInt8>?, size
     )
 
     guard err2 == KERN_SUCCESS else {
+        // This shouldn't happen; if it fails here, the process is corrupted because we can't recover the previous executable page.
         print("ellekit: failed to restore RX protection err=\(err2) message=\(debugMachError(err2)) address=\(address) size=\(size)")
         abort()
     }

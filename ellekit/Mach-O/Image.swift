@@ -5,18 +5,25 @@
 import Foundation
 import MachO
 
+//According to the Substrate specification, we should not load the library if it has not already been loaded: https://www.cydiasubstrate.com/api/c/MSGetImageByName
 public func openImage(image path: String) throws -> UnsafePointer<mach_header>?
 {
     var want = stat()
     var useInode = false
+    var loadpath = path
     
     //fast check
     guard let handler = dlopen(path, RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD) else {
         return nil
     }
     defer { dlclose(handler) }
+    
+    if #available(iOS 16.0, macOS 13.0, *) {
+        return _dyld_get_dlopen_image_header(handler)!
+    }
 
     if #available(iOS 14.0, macOS 11.0, *), _dyld_shared_cache_contains_path(path) {
+        loadpath =  String(cString: _dyld_shared_cache_real_path(path))
         useInode = false
     } else {
         //slow path
@@ -26,7 +33,7 @@ public func openImage(image path: String) throws -> UnsafePointer<mach_header>?
     for i in 0..<_dyld_image_count() {
         guard let name = _dyld_get_image_name(i) else { continue }
 
-        if strcmp(name, path) == 0 {
+        if strcmp(name, loadpath) == 0 {
             return _dyld_get_image_header(i)
         }
         

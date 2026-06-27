@@ -255,7 +255,19 @@ struct dyld_cache_local_symbols_entry
 static const uint64_t kDyldSharedCacheTypeDevelopment = 0;
 static const uint64_t kDyldSharedCacheTypeProduction = 1;
 
+//
+// This is similar to _dyld_shared_cache_contains_path(), except that it returns the canonical
+// shared cache path for the given path.
+//
+// Exists in macOS 10.16 and later
+// Exists in iOS 14.0 and later
+extern const char* _dyld_shared_cache_real_path(const char* path) __API_AVAILABLE(macos(10.16), ios(14.0));
 
+//
+// Return the mach header of the binary returned by dlopen
+//
+// Exists in Mac OS X 13.0 and later
+extern const struct mach_header* _dyld_get_dlopen_image_header(void* handle) __API_AVAILABLE(macos(13.0), ios(16.0));
 
 
 #endif // __DYLD_CACHE_FORMAT__

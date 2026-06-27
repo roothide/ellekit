@@ -208,6 +208,7 @@ public func findPrivateSymbol(
             }
 
             // Match dlsym: only PAC-sign when the target is code in an arm64e image.
+            // According to the Substrate specification, the returned function pointer should be directly callable, so we must sign it if it is code: https://www.cydiasubstrate.com/api/c/MSFindSymbol
             if symbolTargetIsCode(image: machHeaderPointer, vmaddr: symbol.n_value) {
                 return UnsafeRawPointer(target.makeCallable())
             }

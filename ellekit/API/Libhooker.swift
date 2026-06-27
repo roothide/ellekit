@@ -82,7 +82,10 @@ public func LHExecMemory(_ page: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
         mach_vm_deallocate(mach_task_self_, addr, allocSize)
         return false
     }
+    
     memcpy(UnsafeMutableRawPointer(bitPattern: UInt(addr)), data, size)
+    
+    // This might fail if developer mode is not enabled.
     let krt3 = mach_vm_protect(mach_task_self_, addr, allocSize, 0, VM_PROT_READ | VM_PROT_EXECUTE)
     guard krt3 == KERN_SUCCESS else {
         print(["[-] couldn't set memory to r*x:", String(cString: mach_error_string(krt3))])

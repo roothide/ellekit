@@ -142,11 +142,12 @@ func getOriginal(_ target: UnsafeMutableRawPointer, _ rebindSize: Int, codePlace
     // Self-allocated page: seal RX + icache here. External placement (e.g. nearby
     // freeSpace) stays RW until the caller's finalize(); page must already be writable.
     if ownsMemory {
+        // This might fail if developer mode is not enabled.
         let rxKr = mach_vm_protect(mach_task_self_, pageBase, UInt64(vm_page_size), 0, VM_PROT_READ | VM_PROT_EXECUTE)
         guard rxKr == KERN_SUCCESS else {
             print(["[-] ellekit: couldn't vm_protect orig page to RX:", debugMachError(rxKr)])
             mach_vm_deallocate(mach_task_self_, pageBase, UInt64(vm_page_size))
-            return nil
+            abort()
         }
         sys_icache_invalidate(UnsafeMutableRawPointer(bitPattern: UInt(pageBase))!, Int(vm_page_size))
     }
