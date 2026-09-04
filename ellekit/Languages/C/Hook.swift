@@ -240,41 +240,5 @@ func rawHook(address: UnsafeMutableRawPointer, code: UnsafePointer<UInt8>?, size
         resumeAllThreads(threads)
     }
     
-    let goodSize = Int(size)
-    let machAddr = mach_vm_address_t(UInt(bitPattern: address))
-            
-    let krt1 = custom_mach_vm_protect(
-        mach_task_self_,
-        machAddr,
-        size,
-        0,
-        VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY
-    )
-        
-    guard krt1 == KERN_SUCCESS else {
-        print("[-] ellekit: rawHook failed to set RW protection err=\(krt1) message=\(debugMachError(krt1)) address=\(address) size=\(size)")
-        return Int(krt1)
-    }
-
-    manual_memcpy(address, code, goodSize)
-        
-    // This might fail if developer mode is not enabled.
-    let err2 = custom_mach_vm_protect(
-        mach_task_self_,
-        machAddr,
-        size,
-        0,
-        VM_PROT_READ | VM_PROT_EXECUTE
-    )
-
-    guard err2 == KERN_SUCCESS else {
-        // This shouldn't happen; if it fails here, the process is corrupted because we can't recover the previous executable page.
-        print("ellekit: failed to restore RX protection err=\(err2) message=\(debugMachError(err2)) address=\(address) size=\(size)")
-        abort()
-    }
-
-    // flush page cache so we don't hit cached unpatched functions
-    sys_icache_invalidate(address, Int(size))
-               
-    return 0
+    return Int(EKHookMemoryRaw(address, code, Int(size)))
 }

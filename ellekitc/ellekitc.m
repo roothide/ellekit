@@ -7,6 +7,11 @@
 #endif
 
 #include <mach/message.h>
+#include <mach/vm_region.h>
+#include <mach/vm_map.h>
+#include <mach/mach.h>
+#include <stdbool.h>
+#include <libkern/OSCacheControl.h>
 
 // MARK: - PAC
 
@@ -95,3 +100,26 @@ void manual_memcpy(void *restrict dest, const void *src, size_t len) {
     while (len--)
         *d8++ = *s8++;
 }
+
+kern_return_t EKHookMemoryRaw_impl(void *target, const void *data, size_t size)
+{
+    kern_return_t kr = custom_mach_vm_protect(mach_task_self(), (vm_address_t)target, size, 0, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
+        
+    if (kr != KERN_SUCCESS) {
+        return kr;
+    }
+
+    manual_memcpy(target, data, size);
+
+    // This might fail if developer mode is not enabled.
+    kr = custom_mach_vm_protect(mach_task_self(), (vm_address_t)target, size, 0, VM_PROT_READ | VM_PROT_EXECUTE);
+    if (kr != KERN_SUCCESS) {
+        __asm("brk #1"); // This shouldn't happen; if it fails here, the process is corrupted because we can't recover the previous executable page.
+        return kr;
+    }
+
+    sys_icache_invalidate(target, size);
+    return kr;
+}
+
+__attribute__((visibility ("default"))) kern_return_t (*EKHookMemoryRaw)(void *, const void *, size_t) = EKHookMemoryRaw_impl;

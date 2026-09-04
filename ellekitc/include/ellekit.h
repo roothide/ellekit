@@ -12,7 +12,11 @@
 
 #import "sandbox.h"
 
+#if __has_include(<xpc/xpc.h>)
+#import <xpc/xpc.h>
+#else
 #import "xpc.h"
+#endif
 
 #include <roothide/roothide.h>
 
@@ -93,6 +97,7 @@ extern kern_return_t
 mach_vm_map(vm_map_t target_task, mach_vm_address_t *address, mach_vm_size_t size, mach_vm_offset_t mask, int flags, mem_entry_name_port_t object, memory_object_offset_t offset, boolean_t copy, vm_prot_t cur_protection, vm_prot_t max_protection, vm_inherit_t inheritance);
 
 extern void manual_memcpy(void *restrict dest, const void *src, size_t len);
+extern kern_return_t (*EKHookMemoryRaw)(void *target, const void *data, size_t size);
 
 int memlock(void*,int);
 
