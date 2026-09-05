@@ -89,7 +89,7 @@ struct NearbyTrampoline
     /// Must run after all stub writes and before `base` is patched to branch here.
     func finalize() {
         // This might fail if developer mode is not enabled.
-        let kr = custom_mach_vm_protect(
+        let kr = mach_vm_protect(
             mach_task_self_,
             mach_vm_address_t(UInt(bitPattern: trampolinePage)),
             mach_vm_size_t(vm_page_size),
