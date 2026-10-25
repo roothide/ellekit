@@ -105,17 +105,24 @@ void manual_memcpy(void *restrict dest, const void *src, size_t len) {
         *d8++ = *s8++;
 }
 
-kern_return_t EKHookMemoryRaw_impl(void *target, const void *data, size_t size)
+static __typeof(mach_vm_protect)* substrate_vm_protect = NULL;
+static kern_return_t (*substrate_hook_memory)(void *, const void *, size_t) = NULL;
+
+// 在暂停其他线程前完成符号解析，避免等待被暂停线程持有的 dyld 锁。
+void EKPrepareHookMemory(void)
 {
-    static __typeof(mach_vm_protect)* substrate_vm_protect = NULL;
-    static __typeof(EKHookMemoryRaw_impl)* substrate_hook_memory = NULL;
-    
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         substrate_vm_protect = dlsym(RTLD_DEFAULT, "substrate_vm_protect");
         substrate_hook_memory = dlsym(RTLD_DEFAULT, "substrate_hook_memory");
     });
-    
+}
+
+// 使用已缓存的写入后端；直接调用此入口时仍保留按需初始化行为。
+kern_return_t EKHookMemoryRaw_impl(void *target, const void *data, size_t size)
+{
+    EKPrepareHookMemory();
+
     if(substrate_hook_memory) {
         return substrate_hook_memory(target, data, size);
     }

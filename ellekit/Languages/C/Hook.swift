@@ -230,12 +230,13 @@ func split(from uint64: UInt64) -> [UInt8] {
 }
 
 @discardableResult @_optimize(speed)
+// 先完成初始化和日志，再暂停线程写入补丁，并保证返回前恢复线程。
 func rawHook(address: UnsafeMutableRawPointer, code: UnsafePointer<UInt8>?, size: mach_vm_size_t) -> Int {
-    
-    //NSLog("[hookinfo] patching \(String(describing: address)) with \(code == nil ? "nothing!" : Array(UnsafeBufferPointer(start: code, count: Int(size))).map {String(format: "%02X", $0)}.joined())")
+    // 符号解析、字符串格式化和日志输出都可能获取其他线程持有的锁。
+    EKPrepareHookMemory()
+    print("[*] ellekit: rawHook start address=\(address) size=\(size) code=\(debugBytes(code, count: Int(size)))")
 
     let threads = stopAllThreads()
-    print("[*] ellekit: rawHook start address=\(address) size=\(size) code=\(debugBytes(code, count: Int(size))) stoppedThreads=\(threads.count)")
     defer {
         resumeAllThreads(threads)
     }
